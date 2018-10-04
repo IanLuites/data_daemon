@@ -66,8 +66,12 @@ defmodule DataDaemon do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
     decorators = if Keyword.get(opts, :decorators, true), do: __MODULE__.Decorators.enable()
 
+    plug =
+      if Keyword.get(opts, :plug, true) && Code.ensure_loaded?(Plug), do: __MODULE__.Plug.enable()
+
     quote location: :keep do
       unquote(decorators)
+      unquote(plug)
 
       @doc false
       @spec otp :: atom
