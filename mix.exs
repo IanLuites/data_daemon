@@ -4,7 +4,7 @@ defmodule DataDaemon.MixProject do
   def project do
     [
       app: :data_daemon,
-      version: "0.0.1",
+      version: "0.0.2",
       description: "An Elixir StatsD client made for DataDog.",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
@@ -61,6 +61,7 @@ defmodule DataDaemon.MixProject do
   defp deps do
     [
       {:poolboy, "~> 1.5"},
+      {:plug, ">= 0.0.0", optional: true},
       {:ex_doc, ">= 0.0.0", only: :dev}
     ]
   end
