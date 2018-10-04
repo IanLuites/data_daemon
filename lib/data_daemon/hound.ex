@@ -108,7 +108,7 @@ defmodule DataDaemon.Hound do
     :ok
   end
 
-  @spec open :: Redix.Connection.t()
+  @spec open :: Port.t()
   defp open do
     {:ok, socket} = :gen_udp.open(0, active: false)
 
