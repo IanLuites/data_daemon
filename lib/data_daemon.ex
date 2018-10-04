@@ -64,8 +64,11 @@ defmodule DataDaemon do
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
+    decorators = if Keyword.get(opts, :decorators, true), do: __MODULE__.Decorators.enable()
 
     quote location: :keep do
+      unquote(decorators)
+
       @doc false
       @spec otp :: atom
       def otp, do: unquote(otp_app)
