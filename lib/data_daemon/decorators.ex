@@ -66,11 +66,7 @@ defmodule DataDaemon.Decorators do
         end)
         |> Enum.sort_by(&if(elem(&1, 0) == :timing, do: 1, else: 0))
 
-      body =
-        case body do
-          [do: body] -> body
-          body -> body
-        end
+      body = if Keyword.keyword?(body), do: Keyword.get(body, :do), else: body
 
       attrs = extract_attributes(env.module, body)
       instrumented = {kind, fun, args, guards, body, attrs, instruments}
