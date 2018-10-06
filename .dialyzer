@@ -1,0 +1,3 @@
+lib/data_daemon.ex:211: Function start_link/1 has no local return
+lib/data_daemon.ex:214: The call 'Elixir.Module':concat(_module@1::[atom() | tuple()],'Elixir.Supervisor') will never return since the success typing is (atom() | binary(),atom() | binary()) -> atom() and the contract is (binary() | atom(),binary() | atom()) -> atom()
+lib/data_daemon/hound.ex:11: Invalid type specification for function 'Elixir.DataDaemon.Hound':child_spec/3. The success typing is ([atom() | tuple()],_,_) -> {_,{'poolboy','start_link',[any(),...]},'permanent',5000,'worker',['poolboy',...]}

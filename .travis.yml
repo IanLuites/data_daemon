@@ -1,0 +1,16 @@
+sudo: true
+language: elixir
+elixir:
+  - 1.7.3
+otp_release:
+  - 21.0
+matrix:
+  include:
+    - elixir: 1.7.3
+      otp_release: 21.0
+script:
+  - mix analyze --non-interactive
+cache:
+  directories:
+    - _build
+    - deps

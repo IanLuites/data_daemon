@@ -4,7 +4,7 @@ defmodule DataDaemon.MixProject do
   def project do
     [
       app: :data_daemon,
-      version: "0.0.2",
+      version: "0.0.3",
       description: "An Elixir StatsD client made for DataDog.",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
@@ -19,7 +19,7 @@ defmodule DataDaemon.MixProject do
         "coveralls.post": :test,
         "coveralls.html": :test
       ],
-      # dialyzer: [ignore_warnings: "dialyzer.ignore-warnings", plt_add_deps: true],
+      dialyzer: [ignore_warnings: ".dialyzer", plt_add_deps: true],
 
       # Docs
       name: "Data Daemon",
@@ -62,7 +62,8 @@ defmodule DataDaemon.MixProject do
     [
       {:poolboy, "~> 1.5"},
       {:plug, ">= 0.0.0", optional: true},
-      {:ex_doc, ">= 0.0.0", only: :dev}
+      {:meck, "~> 0.8.12", optional: true, runtime: false, only: [:test]},
+      {:analyze, "~> 0.1.2-rc.3", optional: true, runtime: false, only: [:dev, :test]}
     ]
   end
 end
