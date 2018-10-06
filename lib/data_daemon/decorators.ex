@@ -48,6 +48,7 @@ defmodule DataDaemon.Decorators do
   def count(metric, opts \\ []), do: {:count, metric, opts}
 
   @doc false
+  @spec on_definition(Macro.Env.t(), atom, atom, term, term, term) :: term
   def on_definition(env, kind, fun, args, guards, body) do
     instruments = Module.get_attribute(env.module, :metric)
 
