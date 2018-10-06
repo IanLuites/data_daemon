@@ -1,5 +1,7 @@
 defmodule DataDaemonTest do
   use ExUnit.Case
 
-  test "placholder", do: assert(true)
+  test "child_spec/1" do
+    assert DataDaemon.child_spec(Example)
+  end
 end
