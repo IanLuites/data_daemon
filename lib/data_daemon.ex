@@ -12,7 +12,9 @@ defmodule DataDaemon do
   # In your application code
   defmodule Sample.DataDog do
     @moduledoc ~S"My DataDog reporter."
-    use DataDaemon, otp_app: :my_app
+    use DataDaemon,
+      otp_app: :my_app,
+      extensions: [:datadog]
   end
 
   defmodule Sample.App do
@@ -61,6 +63,10 @@ defmodule DataDaemon do
   """
   @type tags :: [tag | {tag, tag}]
 
+  @extensions %{
+    datadog: DataDaemon.Extensions.DataDog
+  }
+
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
@@ -69,7 +75,27 @@ defmodule DataDaemon do
     plug =
       if Keyword.get(opts, :plug, true) && Code.ensure_loaded?(Plug), do: __MODULE__.Plug.enable()
 
+    extensions =
+      case opts[:extensions] do
+        nil ->
+          nil
+
+        extensions when is_list(extensions) ->
+          Enum.reduce(
+            extensions,
+            nil,
+            &quote location: :keep do
+              unquote(&2)
+              use unquote(@extensions[&1] || &1), unquote(opts)
+            end
+          )
+
+        extension ->
+          quote do: use(unquote(@extensions[extension] || extension), unquote(opts))
+      end
+
     quote location: :keep do
+      unquote(extensions)
       unquote(decorators)
       unquote(plug)
 
@@ -92,12 +118,6 @@ defmodule DataDaemon do
       """
       @spec count(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
       def count(key, value, opts \\ []), do: metric(key, value, :counter, opts)
-
-      @doc ~S"""
-      Distribution tracks the statistical distribution of a set of values across your infrastructure.
-      """
-      @spec distribution(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
-      def distribution(key, value, opts \\ []), do: metric(key, value, :distribution, opts)
 
       @doc ~S"""
       Increment is an alias of count with a default of 1.
@@ -145,16 +165,12 @@ defmodule DataDaemon do
       @spec timing(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
       def timing(key, value, opts \\ []), do: metric(key, value, :timing, opts)
 
-      @doc false
+      @doc ~S"""
+      """
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
-      def metric(key, value, type, opts \\ []) do
-        :poolboy.transaction(
-          __MODULE__,
-          &GenServer.cast(&1, {:metric, DataDaemon.package(key, value, type, opts)}),
-          5000
-        )
-      end
+      def metric(key, value, type, opts \\ []),
+        do: DataDaemon.metric(__MODULE__, key, value, type, opts)
     end
   end
 
@@ -169,47 +185,45 @@ defmodule DataDaemon do
     }
   end
 
-  @doc false
-  @spec start_link(module) :: Supervisor.on_start()
-  def start_link(module) do
-    children = [DataDaemon.Hound.child_spec(module)]
+  import DataDaemon.Util, only: [package: 4]
+  alias DataDaemon.Hound
 
-    opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
-    Supervisor.start_link(children, opts)
-  end
+  if Mix.env() == :test do
+    @doc false
+    @spec start_link(module) :: Supervisor.on_start()
+    def start_link(module),
+      do: Agent.start_link(fn -> [] end, name: module) || Hound.child_spec(module)
 
-  @spec package(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) :: iodata
-  def package(key, value, type, opts \\ []) do
-    [key, ?:, to_string(value), ?|, pack_type(type)]
-    |> tag(opts[:tags])
-  end
+    @doc false
+    @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
+            :ok | {:error, atom}
+    def metric(reporter, key, value, type, opts \\ []) do
+      Agent.update(reporter, &[:erlang.iolist_to_binary(package(key, value, type, opts)) | &1])
 
-  @spec tag(iodata, nil | tags) :: iodata
-  defp tag(data, nil), do: data
-  defp tag(data, []), do: data
+      :ok
+    end
 
-  defp tag(data, tags) do
-    [
-      data,
-      "|#",
-      Enum.intersperse(
-        Enum.map(
-          tags,
-          fn
-            {k, v} -> [to_string(k), ?:, to_string(v)]
-            v -> to_string(v)
-          end
-        ),
-        ?,
+    def reported(reporter), do: Agent.get(reporter, &List.last/1)
+    def all_reported(reporter), do: Agent.get(reporter, &Enum.reverse/1)
+  else
+    @doc false
+    @spec start_link(module) :: Supervisor.on_start()
+    def start_link(module) do
+      children = [Hound.child_spec(module)]
+
+      opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
+      Supervisor.start_link(children, opts)
+    end
+
+    @doc false
+    @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
+            :ok | {:error, atom}
+    def metric(reporter, key, value, type, opts \\ []) do
+      :poolboy.transaction(
+        reporter,
+        &GenServer.cast(&1, {:metric, package(key, value, type, opts)}),
+        5000
       )
-    ]
+    end
   end
-
-  @spec pack_type(type) :: String.t()
-  defp pack_type(:counter), do: "c"
-  defp pack_type(:distribution), do: "d"
-  defp pack_type(:gauge), do: "g"
-  defp pack_type(:histogram), do: "h"
-  defp pack_type(:set), do: "s"
-  defp pack_type(:timing), do: "ms"
 end

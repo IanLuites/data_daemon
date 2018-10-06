@@ -34,7 +34,8 @@ defmodule DataDaemon.Hound do
         uri = URI.parse(url)
         {uri.host, uri.port}
       else
-        {Application.fetch_env!(otp, daemon)[:host], resolve_config(otp, daemon, :port, -1)}
+        {Application.fetch_env!(otp, daemon)[:host] || "localhost",
+         resolve_config(otp, daemon, :port, 8_125)}
       end
 
     GenServer.start_link(
@@ -64,9 +65,9 @@ defmodule DataDaemon.Hound do
   ## Server API
 
   @impl GenServer
-  def init(state) do
+  def init(state = %{host: host, port: port}) do
     Process.flag(:trap_exit, true)
-    header = build_header("localhost", 8125)
+    header = build_header(host, port)
 
     state =
       Map.merge(state, %{
@@ -108,7 +109,7 @@ defmodule DataDaemon.Hound do
     :ok
   end
 
-  @spec open :: Port.t()
+  @spec open :: :gen_udp.socket()
   defp open do
     {:ok, socket} = :gen_udp.open(0, active: false)
 
@@ -167,7 +168,7 @@ defmodule DataDaemon.Hound do
   defp start_timer(nil, udp_wait), do: Process.send_after(self(), :force_send, udp_wait)
   defp start_timer(timer, _), do: timer
 
-  @spec send_buffer(Port.t(), iodata) :: boolean
+  @spec send_buffer(:gen_udp.socket(), iodata) :: boolean
   defp send_buffer(socket, buffer), do: Port.command(socket, buffer)
 
   @spec build_header(String.t(), pos_integer) :: iodata
