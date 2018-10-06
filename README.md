@@ -1,5 +1,9 @@
 # Data Daemon
 
+[![Hex.pm](https://img.shields.io/hexpm/v/data_daemon.svg "Hex")](https://hex.pm/packages/data_daemon)
+[![Build Status](https://travis-ci.org/IanLuites/data_daemon.svg?branch=master)](https://travis-ci.org/IanLuites/data_daemon)
+[![Hex.pm](https://img.shields.io/hexpm/l/data_daemon.svg "License")](LICENSE)
+
 An Elixir StatsD client made for DataDog.
 
 ## Quick Setup
