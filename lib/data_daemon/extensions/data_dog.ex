@@ -1,6 +1,6 @@
 defmodule DataDaemon.Extensions.DataDog do
   @moduledoc false
-  import DataDaemon.Util, only: [unix_timestamp: 1]
+  import DataDaemon.Util, only: [iso8601: 1]
 
   @event_fields ~w(
     timestamp
@@ -20,8 +20,7 @@ defmodule DataDaemon.Extensions.DataDog do
   defp add_event_opt(opt, {:system, env}, event),
     do: add_event_opt(opt, System.get_env(env), event)
 
-  defp add_event_opt(:timestamp, value, event),
-    do: [event, "|d:", to_string(unix_timestamp(value))]
+  defp add_event_opt(:timestamp, value, event), do: [event, "|d:", iso8601(value)]
 
   defp add_event_opt(:hostname, nil, event), do: event
   defp add_event_opt(:hostname, hostname, event), do: [event, "|h:", hostname]
@@ -38,8 +37,23 @@ defmodule DataDaemon.Extensions.DataDog do
   defp add_event_opt(:alert_type, nil, event), do: [event, "|t:info"]
   defp add_event_opt(:alert_type, type, event), do: [event, "|t:", to_string(type)]
 
+  @doc false
+  @spec init(module, Keyword.t()) :: :ok
+  def init(daemon, opts \\ []) do
+    if opts[:error_handler] do
+      :error_logger.add_report_handler(
+        DataDaemon.Extensions.DataDog.ErrorHandler,
+        daemon
+      )
+
+      Logger.add_backend({DataDaemon.Extensions.DataDog.ErrorHandler, daemon})
+    end
+
+    :ok
+  end
+
   defmacro __using__(_opts \\ []) do
-    quote do
+    quote location: :keep do
       @doc ~S"""
       Distribution tracks the statistical distribution of a set of values across your infrastructure.
       """
@@ -64,7 +78,7 @@ defmodule DataDaemon.Extensions.DataDog do
       """
       @spec event(String.t(), String.t(), Keyword.t()) :: String.t()
       def event(title, text, opts \\ []) do
-        text = String.replace(text, "\n", "\\\\n")
+        text = String.replace(text, "\n", "\\n")
 
         metric(
           "_e{#{String.length(title)},#{String.length(text)}}",
@@ -74,5 +88,90 @@ defmodule DataDaemon.Extensions.DataDog do
         )
       end
     end
+  end
+
+  defmodule ErrorHandler do
+    @moduledoc false
+    @behaviour :gen_event
+    @unix_g 62_167_219_200
+
+    @ignored ~w(info_report)a
+
+    @doc false
+    @impl :gen_event
+    def init({_, module}) do
+      {:ok, hostname} = :inet.gethostname()
+      {:ok, {module, hostname}}
+    end
+
+    @doc false
+    @impl :gen_event
+    def handle_event(event, state)
+
+    def handle_event(:flush, state), do: {:ok, state}
+
+    def handle_event({_level, gl, _event}, state) when node(gl) != node(), do: {:ok, state}
+    def handle_event({level, _gl, _event}, state) when level in @ignored, do: {:ok, state}
+
+    def handle_event({level, _gl, {Logger, message, timestamp, meta}}, state = {module, hostname}) do
+      level = translate_level(level)
+      {{year, month, day}, {hour, minute, second, _millisecond}} = timestamp
+
+      ts =
+        :calendar.datetime_to_gregorian_seconds({{year, month, day}, {hour, minute, second}}) -
+          @unix_g
+
+      case String.split(message, "\n", parts: 2, trim: true) do
+        [title] ->
+          report(module, level, title, inspect(meta), ts, hostname)
+
+        [title, message] ->
+          report(module, level, title, message <> "\n\n" <> inspect(meta), ts, hostname)
+      end
+
+      {:ok, state}
+    end
+
+    def handle_event({_level, _gl, _event}, state) do
+      # Erlang errors, implement at later point
+      {:ok, state}
+    end
+
+    @spec report(
+            atom,
+            :error | :info | :debug | :warn,
+            String.t(),
+            String.t(),
+            integer,
+            String.t()
+          ) :: atom
+    defp report(module, level, title, message, timestamp, hostname) do
+      module.event(title, message,
+        timestamp: timestamp,
+        alert_type: level,
+        hostname: hostname
+      )
+    end
+
+    @spec translate_level(atom) :: atom
+    defp translate_level(:error), do: :error
+    defp translate_level(:info), do: :info
+    defp translate_level(:debug), do: :info
+    defp translate_level(:warn), do: :warning
+
+    @doc false
+    @impl :gen_event
+    def handle_call(request, _state), do: exit({:bad_call, request})
+
+    @doc false
+    @impl :gen_event
+    def handle_info(_message, state), do: {:ok, state}
+    @doc false
+    @impl :gen_event
+    def terminate(_reason, _state), do: :ok
+
+    @doc false
+    @impl :gen_event
+    def code_change(_old_vsn, state, _extra), do: {:ok, state}
   end
 end
