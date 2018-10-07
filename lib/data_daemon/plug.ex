@@ -19,7 +19,9 @@ defmodule DataDaemon.Plug do
       @impl Plug
       def init(opts) do
         tags =
-          Enum.map(opts[:tags] || [], fn
+          opts
+          |> Keyword.get(:tags, [])
+          |> Enum.map(fn
             conn = {:conn, field} when is_list(field) -> {:conn, field}
             {:conn, field} -> {:conn, [field]}
             env = {:system, _} -> env
@@ -29,10 +31,16 @@ defmodule DataDaemon.Plug do
             {k, v} -> {to_string(k), to_string(v)}
             v -> to_string(v)
           end)
+          |> Enum.group_by(fn
+            {:conn, _} -> :conn
+            {_, {:conn, _}} -> :conn
+            _ -> :tags
+          end)
 
         %{
           metric: opts[:metric] || raise("Need to set metric name."),
-          tags: tags,
+          tags: Map.get(tags, :tags, []),
+          conn_tags: Map.get(tags, :conn_tags, []),
           exclude: opts[:exclude] || []
         }
       end
@@ -40,7 +48,12 @@ defmodule DataDaemon.Plug do
       @doc false
       @spec call(Plug.Conn.t(), map) :: Plug.Conn.t()
       @impl Plug
-      def call(conn = %{request_path: path}, %{metric: metric, tags: tags, exclude: exclude}) do
+      def call(conn = %{request_path: path}, %{
+            metric: metric,
+            tags: tags,
+            conn_tags: conn_tags,
+            exclude: exclude
+          }) do
         if path in exclude do
           conn
         else
@@ -49,20 +62,19 @@ defmodule DataDaemon.Plug do
           register_before_send(conn, fn conn ->
             time = :erlang.monotonic_time(:milli_seconds) - start_time
 
-            tags =
-              Enum.map(tags, fn
+            conn_tags =
+              Enum.map(conn_tags, fn
                 {:conn, conn_tag} -> safe_in(conn, conn_tag)
-                {:system, env} -> System.get_env(env)
-                {k, {:system, env}} -> {k, System.get_env(env)}
                 {k, {:conn, conn_tag}} -> {k, safe_in(conn, conn_tag)}
-                tag -> tag
               end)
 
-            timing(
-              metric,
-              time,
-              tags: tags
-            )
+            spawn(fn ->
+              timing(
+                metric,
+                time,
+                tags: tags ++ conn_tags
+              )
+            end)
 
             conn
           end)
