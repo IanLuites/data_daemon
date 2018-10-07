@@ -70,6 +70,13 @@ defmodule DataDaemon do
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
+    main_module = !opts[:test_mode]
+
+    mode =
+      if main_module,
+        do: quote(do: alias(DataDaemon, as: DataDaemonDriver)),
+        else: quote(do: alias(DataDaemon.TestDaemon, as: DataDaemonDriver))
+
     decorators = if Keyword.get(opts, :decorators, true), do: __MODULE__.Decorators.enable()
 
     plug =
@@ -77,27 +84,24 @@ defmodule DataDaemon do
 
     extensions =
       case opts[:extensions] do
-        nil ->
-          nil
-
-        extensions when is_list(extensions) ->
-          Enum.reduce(
-            extensions,
-            nil,
-            &quote location: :keep do
-              unquote(&2)
-              use unquote(@extensions[&1] || &1), unquote(opts)
-            end
-          )
-
-        extension ->
-          quote do: use(unquote(@extensions[extension] || extension), unquote(opts))
+        nil -> []
+        extensions when is_list(extensions) -> Enum.map(extensions, &(@extensions[&1] || &1))
+        extension -> [@extensions[extension] || extension]
       end
 
+    extension_imports =
+      Enum.reduce(
+        extensions,
+        nil,
+        &quote location: :keep do
+          unquote(&2)
+          use unquote(&1), unquote(opts)
+        end
+      )
+
     quote location: :keep do
-      unquote(extensions)
-      unquote(decorators)
-      unquote(plug)
+      ### Base ###
+      unquote(mode)
 
       @doc false
       @spec otp :: atom
@@ -105,13 +109,24 @@ defmodule DataDaemon do
 
       @doc false
       @spec child_spec(any) :: map
-      def child_spec(_), do: DataDaemon.child_spec(__MODULE__)
+      def child_spec(_), do: DataDaemonDriver.child_spec(__MODULE__)
 
       @doc ~S"""
       Start the DataDaemon.
       """
       @spec start_link :: Supervisor.on_start()
-      def start_link, do: DataDaemon.start_link(__MODULE__)
+      def start_link do
+        Enum.each(unquote(extensions), & &1.init(__MODULE__, unquote(opts)))
+        DataDaemonDriver.start_link(__MODULE__)
+      end
+
+      ### Extensions / Plugs ###
+
+      unquote(extension_imports)
+      unquote(decorators)
+      unquote(plug)
+
+      ### Methods ###
 
       @doc ~S"""
       Count tracks how many times something happened per second.
@@ -170,7 +185,7 @@ defmodule DataDaemon do
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
       def metric(key, value, type, opts \\ []),
-        do: DataDaemon.metric(__MODULE__, key, value, type, opts)
+        do: DataDaemonDriver.metric(__MODULE__, key, value, type, opts)
     end
   end
 
@@ -188,42 +203,23 @@ defmodule DataDaemon do
   import DataDaemon.Util, only: [package: 4]
   alias DataDaemon.Hound
 
-  if Mix.env() == :test do
-    @doc false
-    @spec start_link(module) :: Supervisor.on_start()
-    def start_link(module),
-      do: Agent.start_link(fn -> [] end, name: module) || Hound.child_spec(module)
+  @doc false
+  @spec start_link(module) :: Supervisor.on_start()
+  def start_link(module) do
+    children = [Hound.child_spec(module)]
 
-    @doc false
-    @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
-            :ok | {:error, atom}
-    def metric(reporter, key, value, type, opts \\ []) do
-      Agent.update(reporter, &[:erlang.iolist_to_binary(package(key, value, type, opts)) | &1])
+    opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
+    Supervisor.start_link(children, opts)
+  end
 
-      :ok
-    end
-
-    def reported(reporter), do: Agent.get(reporter, &List.last/1)
-    def all_reported(reporter), do: Agent.get(reporter, &Enum.reverse/1)
-  else
-    @doc false
-    @spec start_link(module) :: Supervisor.on_start()
-    def start_link(module) do
-      children = [Hound.child_spec(module)]
-
-      opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
-      Supervisor.start_link(children, opts)
-    end
-
-    @doc false
-    @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
-            :ok | {:error, atom}
-    def metric(reporter, key, value, type, opts \\ []) do
-      :poolboy.transaction(
-        reporter,
-        &GenServer.cast(&1, {:metric, package(key, value, type, opts)}),
-        5000
-      )
-    end
+  @doc false
+  @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
+          :ok | {:error, atom}
+  def metric(reporter, key, value, type, opts \\ []) do
+    :poolboy.transaction(
+      reporter,
+      &GenServer.cast(&1, {:metric, package(key, value, type, opts)}),
+      5000
+    )
   end
 end
