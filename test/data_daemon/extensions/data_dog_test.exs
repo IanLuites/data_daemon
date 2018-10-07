@@ -1,8 +1,9 @@
 defmodule DataDaemon.Extensions.DataDogTest do
   use ExUnit.Case, async: false
+  alias DataDaemon.TestDaemon
 
   defmodule Example do
-    use DataDaemon, otp_app: :data_daemon, extensions: :datadog
+    use DataDaemon, otp_app: :data_daemon, extensions: :datadog, test_mode: true
   end
 
   setup do
@@ -11,7 +12,7 @@ defmodule DataDaemon.Extensions.DataDogTest do
     :ok
   end
 
-  defp reported, do: String.split(DataDaemon.reported(Example), "|")
+  defp reported, do: String.split(TestDaemon.reported(Example), "|")
 
   describe "event/3" do
     test "report event" do
@@ -50,28 +51,28 @@ defmodule DataDaemon.Extensions.DataDogTest do
       assert Example.event("title", "body\nnewline") == :ok
 
       event = reported()
-      assert Enum.at(event, 0) == "_e{5,14}:title"
-      assert Enum.at(event, 1) == "body\\\\nnewline"
+      assert Enum.at(event, 0) == "_e{5,13}:title"
+      assert Enum.at(event, 1) == "body\\nnewline"
     end
 
     test "sets timestamp with timestamp: <Integer>" do
-      assert Example.event("title", "body", timestamp: 5) == :ok
+      assert Example.event("title", "body", timestamp: 1_538_905_853_149) == :ok
 
-      assert "d:5" in reported()
+      assert "d:2018-10-07T09:50:53Z" in reported()
     end
 
     test "sets timestamp with timestamp: <DateTime>" do
       time = DateTime.utc_now()
       assert Example.event("title", "body", timestamp: time) == :ok
 
-      assert "d:#{DateTime.to_unix(time)}" in reported()
+      assert "d:#{DateTime.to_iso8601(time)}" in reported()
     end
 
     test "sets timestamp with timestamp: <NaiveDateTime>" do
       time = NaiveDateTime.utc_now()
       assert Example.event("title", "body", timestamp: time) == :ok
 
-      assert "d:#{NaiveDateTime.diff(time, ~N[1970-01-01 00:00:00], :milliseconds)}" in reported()
+      assert "d:#{NaiveDateTime.to_iso8601(time)}Z" in reported()
     end
 
     test "sets hostname with hostname: <String>" do

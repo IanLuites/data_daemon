@@ -1,8 +1,9 @@
 defmodule DataDaemon.DecoratorsTest do
   use ExUnit.Case, async: false
+  alias DataDaemon.TestDaemon
 
   defmodule Example do
-    use DataDaemon, otp_app: :data_daemon, extensions: [:datadog]
+    use DataDaemon, otp_app: :data_daemon, extensions: [:datadog], test_mode: true
   end
 
   defmodule Profiled do
@@ -25,7 +26,7 @@ defmodule DataDaemon.DecoratorsTest do
     :ok
   end
 
-  defp reported, do: DataDaemon.reported(Example)
+  defp reported, do: TestDaemon.reported(Example)
 
   describe "timing/2" do
     test "report event" do
@@ -64,7 +65,7 @@ defmodule DataDaemon.DecoratorsTest do
       assert Profiled.do_something() == :ok
       assert Profiled.do_something() == :ok
 
-      assert DataDaemon.all_reported(Example) == [
+      assert TestDaemon.all_reported(Example) == [
                "profiled.count:1|c|#function:do_something/0,module:DataDaemon.DecoratorsTest.Profiled,extra:bob",
                "profiled.count:1|c|#function:do_something/0,module:DataDaemon.DecoratorsTest.Profiled,extra:bob"
              ]
