@@ -56,7 +56,11 @@ defmodule DataDaemon do
   @typedoc ~S"""
   Metric tag value.
   """
-  @type tag :: :atom | String.Chars.t()
+  @type tag ::
+          :atom
+          | String.Chars.t()
+          | {:system, String.t()}
+          | {:config, atom, atom}
 
   @typedoc ~S"""
   Metric tags.
