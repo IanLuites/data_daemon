@@ -6,9 +6,13 @@ defmodule DataDaemon.Util do
   """
   @spec package(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) :: iodata
   def package(key, value, type, opts \\ []) do
-    [key, ?:, to_string(value), ?|, pack_type(type)]
+    [key, ?:, pack_value(value), ?|, pack_type(type)]
     |> tag(opts[:tags])
   end
+
+  @spec pack_value(DataDaemon.value()) :: iodata
+  defp pack_value(value) when is_list(value), do: value
+  defp pack_value(value), do: to_string(value)
 
   @spec tag(iodata, nil | DataDaemon.tags()) :: iodata
   defp tag(data, nil), do: data
@@ -24,21 +28,22 @@ defmodule DataDaemon.Util do
   defp pack_type(:timing), do: "ms"
   defp pack_type(type), do: type
 
-  defp pack_tag({tag, value}), do: [to_string(tag), ?:, pack_value(value)]
+  defp pack_tag({tag, value}), do: [to_string(tag), ?:, pack_tag_value(value)]
   defp pack_tag(tag), do: to_string(tag)
 
-  defp pack_value({:system, env_var}), do: System.get_env(env_var)
-  defp pack_value(value), do: to_string(value)
+  defp pack_tag_value({:system, env_var}), do: System.get_env(env_var)
+  defp pack_tag_value({:config, app, value}), do: Application.get_env(app, value)
+  defp pack_tag_value(value), do: to_string(value)
 
   @unix ~N[1970-01-01 00:00:00]
   @doc ~S"""
-  Convert a given timestamp to unix epoch timestamp.
+  Convert a given timestamp to iso8601.
 
   Passing `nil` will return the current time.
   """
-  @spec unix_timestamp(NaiveDateTime.t() | DateTime.t() | nil | integer) :: integer
-  def unix_timestamp(nil), do: :erlang.system_time(:milli_seconds)
-  def unix_timestamp(ts = %NaiveDateTime{}), do: NaiveDateTime.diff(ts, @unix, :millisecond)
-  def unix_timestamp(ts = %DateTime{}), do: DateTime.to_unix(ts)
-  def unix_timestamp(ts) when is_integer(ts), do: ts
+  @spec iso8601(NaiveDateTime.t() | DateTime.t() | nil | integer) :: String.t()
+  def iso8601(nil), do: NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()) <> "Z"
+  def iso8601(ts = %NaiveDateTime{}), do: NaiveDateTime.to_iso8601(ts) <> "Z"
+  def iso8601(ts = %DateTime{}), do: DateTime.to_iso8601(ts)
+  def iso8601(ts) when is_integer(ts), do: iso8601(NaiveDateTime.add(@unix, ts, :millisecond))
 end
