@@ -75,6 +75,7 @@ Create an event for the DataDog event stream by passing a `title` and `message`
 to `event/3`.
 
 The following options are also supported:
+
 | **Option**                     | **Description**                                                                           |
 |--------------------------------|-------------------------------------------------------------------------------------------|
 | `:timestamp` (optional)        | Add a timestamp to the event. Default is the current timestamp.                           |
