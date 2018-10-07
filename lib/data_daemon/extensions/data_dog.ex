@@ -116,6 +116,7 @@ defmodule DataDaemon.Extensions.DataDog do
     def handle_event({level, _gl, {Logger, message, timestamp, meta}}, state = {module, hostname}) do
       level = translate_level(level)
       {{year, month, day}, {hour, minute, second, _millisecond}} = timestamp
+      message = if is_list(message), do: :erlang.iolist_to_binary(message), else: message
 
       ts =
         :calendar.datetime_to_gregorian_seconds({{year, month, day}, {hour, minute, second}}) -

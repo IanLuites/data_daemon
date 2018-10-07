@@ -113,7 +113,7 @@ defmodule DataDaemon do
 
       @doc false
       @spec child_spec(any) :: map
-      def child_spec(_), do: DataDaemonDriver.child_spec(__MODULE__)
+      def child_spec(_), do: DataDaemon.child_spec(__MODULE__)
 
       @doc ~S"""
       Start the DataDaemon.

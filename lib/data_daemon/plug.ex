@@ -32,8 +32,8 @@ defmodule DataDaemon.Plug do
             v -> to_string(v)
           end)
           |> Enum.group_by(fn
-            {:conn, _} -> :conn
-            {_, {:conn, _}} -> :conn
+            {:conn, _} -> :conn_tags
+            {_, {:conn, _}} -> :conn_tags
             _ -> :tags
           end)
 
