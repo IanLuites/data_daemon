@@ -1,6 +1,11 @@
 defmodule DataDaemonTest do
   use ExUnit.Case, async: false
 
+  defmodule Example do
+    use DataDaemon,
+      otp_app: :data_daemon
+  end
+
   test "child_spec/1" do
     assert DataDaemon.child_spec(Example)
   end

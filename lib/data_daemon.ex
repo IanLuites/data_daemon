@@ -74,7 +74,10 @@ defmodule DataDaemon do
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
-    main_module = !opts[:test_mode]
+
+    main_module =
+      !(opts[:test_mode] ||
+          Keyword.get(Application.get_env(otp_app, __CALLER__.module, []), :test_mode, false))
 
     mode =
       if main_module,
