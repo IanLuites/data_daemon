@@ -8,7 +8,7 @@ defmodule DataDaemon.Extensions.DataDogErrorHandlerTest do
     use DataDaemon,
       otp_app: :data_daemon,
       extensions: :datadog,
-      error_handler: true,
+      error_handler: :debug,
       test_mode: true
   end
 

@@ -40,13 +40,19 @@ defmodule DataDaemon.Extensions.DataDog do
   @doc false
   @spec init(module, Keyword.t()) :: :ok
   def init(daemon, opts \\ []) do
-    if opts[:error_handler] do
+    handler =
+      opts[:error_handler] ||
+        Keyword.get(Application.get_env(opts[:otp_app], daemon, []), :error_handler, false)
+
+    if handler do
+      level = if(handler === true, do: :info, else: handler)
+
       :error_logger.add_report_handler(
         DataDaemon.Extensions.DataDog.ErrorHandler,
-        daemon
+        {daemon, level}
       )
 
-      Logger.add_backend({DataDaemon.Extensions.DataDog.ErrorHandler, daemon})
+      Logger.add_backend({DataDaemon.Extensions.DataDog.ErrorHandler, {daemon, level}})
     end
 
     :ok
@@ -99,9 +105,9 @@ defmodule DataDaemon.Extensions.DataDog do
 
     @doc false
     @impl :gen_event
-    def init({_, module}) do
+    def init({_, {module, level}}) do
       {:ok, hostname} = :inet.gethostname()
-      {:ok, {module, hostname}}
+      {:ok, %{module: module, hostname: hostname, level: level}}
     end
 
     @doc false
@@ -113,21 +119,26 @@ defmodule DataDaemon.Extensions.DataDog do
     def handle_event({_level, gl, _event}, state) when node(gl) != node(), do: {:ok, state}
     def handle_event({level, _gl, _event}, state) when level in @ignored, do: {:ok, state}
 
-    def handle_event({level, _gl, {Logger, message, timestamp, meta}}, state = {module, hostname}) do
-      level = translate_level(level)
-      {{year, month, day}, {hour, minute, second, _millisecond}} = timestamp
-      message = if is_list(message), do: :erlang.iolist_to_binary(message), else: message
+    def handle_event(
+          {level, _gl, {Logger, message, timestamp, meta}},
+          state = %{module: module, hostname: hostname, level: min_level}
+        ) do
+      unless Logger.compare_levels(min_level, level) == :gt do
+        level = translate_level(level)
+        {{year, month, day}, {hour, minute, second, _millisecond}} = timestamp
+        message = if is_list(message), do: :erlang.iolist_to_binary(message), else: message
 
-      ts =
-        :calendar.datetime_to_gregorian_seconds({{year, month, day}, {hour, minute, second}}) -
-          @unix_g
+        ts =
+          :calendar.datetime_to_gregorian_seconds({{year, month, day}, {hour, minute, second}}) -
+            @unix_g
 
-      case String.split(message, "\n", parts: 2, trim: true) do
-        [title] ->
-          report(module, level, title, inspect(meta), ts, hostname)
+        case String.split(message, "\n", parts: 2, trim: true) do
+          [title] ->
+            report(module, level, title, inspect(meta), ts, hostname)
 
-        [title, message] ->
-          report(module, level, title, message <> "\n\n" <> inspect(meta), ts, hostname)
+          [title, message] ->
+            report(module, level, title, message <> "\n\n" <> inspect(meta), ts, hostname)
+        end
       end
 
       {:ok, state}
