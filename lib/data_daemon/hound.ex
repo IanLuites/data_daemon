@@ -47,17 +47,19 @@ defmodule DataDaemon.Hound do
         udp_wait: resolve_config(otp, daemon, :udp_wait, 5_000),
         udp_size: resolve_config(otp, daemon, :udp_size, 1_472),
         host: host,
-        port: port
+        port: port,
+        dns_refresh: resolve_config(otp, daemon, :dns_refresh, :ttl)
       },
       []
     )
   end
 
-  @spec resolve_config(atom, module, atom, integer) :: integer | no_return
+  @spec resolve_config(atom, module, atom, integer | atom) :: integer | no_return
   defp resolve_config(otp, daemon, option, default) do
     case Application.fetch_env!(otp, daemon)[option] || default do
       value when is_integer(value) -> value
       value when is_binary(value) -> String.to_integer(value)
+      value when is_atom(value) -> value
       {:system, value} -> String.to_integer(System.get_env(value) || to_string(default))
     end
   end
@@ -65,9 +67,9 @@ defmodule DataDaemon.Hound do
   ## Server API
 
   @impl GenServer
-  def init(state = %{host: host, port: port}) do
+  def init(state) do
     Process.flag(:trap_exit, true)
-    header = build_header(host, port)
+    header = generate_header!(state)
 
     state =
       Map.merge(state, %{
@@ -90,6 +92,10 @@ defmodule DataDaemon.Hound do
   end
 
   @impl GenServer
+  def handle_info({:refresh_header, header}, state) do
+    {:noreply, %{state | header: header}}
+  end
+
   def handle_info(:force_send, state = %{socket: socket, buffer: buffer, header: header}) do
     send_buffer(socket, buffer)
     {:noreply, %{state | buffer: header, size: @header_size, timer: nil}}
@@ -171,18 +177,67 @@ defmodule DataDaemon.Hound do
   @spec send_buffer(:gen_udp.socket(), iodata) :: boolean
   defp send_buffer(socket, buffer), do: Port.command(socket, buffer)
 
-  @spec build_header(String.t(), pos_integer) :: iodata
-  defp build_header(host, port) do
-    with {:ok, {n1, n2, n3, n4}} <- :inet.getaddr(String.to_charlist(host), :inet) do
-      [
-        1,
-        :erlang.band(:erlang.bsr(port, 8), 0xFF),
-        :erlang.band(port, 0xFF),
-        :erlang.band(n1, 0xFF),
-        :erlang.band(n2, 0xFF),
-        :erlang.band(n3, 0xFF),
-        :erlang.band(n4, 0xFF)
-      ]
+  @spec generate_header!(map) :: iodata | no_return
+  defp generate_header!(%{host: host, port: port, dns_refresh: refresh}) do
+    host = String.to_charlist(host)
+    {ip, ttl} = resolve!(host)
+    set_refresh(host, port, ip, refresh, ttl)
+    build_header(ip, port)
+  end
+
+  @doc false
+  @spec host_check!(pid, charlist, integer, tuple, integer | atom) :: :ok | no_return
+  def host_check!(hound, host, port, previous_ip, refresh) do
+    {ip, ttl} = resolve!(host)
+    set_refresh(host, port, ip, refresh, ttl)
+
+    if ip != previous_ip do
+      send(
+        hound,
+        {:refresh_header, build_header(ip, port)}
+      )
     end
+
+    :ok
+  end
+
+  @spec set_refresh(charlist, integer, tuple, integer | atom, integer) :: :ok
+  defp set_refresh(host, port, ip, refresh, ttl) do
+    next_check =
+      cond do
+        refresh == :infinity -> -1
+        is_integer(refresh) -> refresh * 1_000
+        is_integer(ttl) -> ttl * 1_000
+        :no_refresh -> -1
+      end
+
+    if next_check > 0,
+      do:
+        :timer.apply_after(next_check, __MODULE__, :host_check!, [self(), host, port, ip, refresh])
+
+    :ok
+  end
+
+  @spec resolve!(charlist) :: {tuple, integer} | no_return
+  defp resolve!(host) do
+    with {:ok, {:dns_rec, _, _, [record | _], _, _}} <- :inet_res.resolve(host, :in, :a),
+         {:dns_rr, _, :a, :in, _, ttl, ip, _, _, _} <- record do
+      {ip, ttl}
+    else
+      _ -> raise "Host #{host} can not be resolved."
+    end
+  end
+
+  @spec build_header(tuple, integer) :: iodata
+  defp build_header({ip1, ip2, ip3, ip4}, port) do
+    [
+      1,
+      :erlang.band(:erlang.bsr(port, 8), 0xFF),
+      :erlang.band(port, 0xFF),
+      :erlang.band(ip1, 0xFF),
+      :erlang.band(ip2, 0xFF),
+      :erlang.band(ip3, 0xFF),
+      :erlang.band(ip4, 0xFF)
+    ]
   end
 end
