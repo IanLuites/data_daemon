@@ -83,8 +83,11 @@ defmodule DataDaemon.Decorators do
     Module.delete_attribute(env.module, :instrumented)
 
     overrides =
-      Enum.map(decorated, fn {_, fun, args, _, _, _, _} ->
-        {fun, Enum.count(args)}
+      Enum.flat_map(decorated, fn {_, fun, args, _, _, _, _} ->
+        args
+        |> Enum.count(&(elem(&1, 0) != :\\))
+        |> (&(&1..Enum.count(args))).()
+        |> Enum.map(&{fun, &1})
       end)
 
     Enum.reduce(
