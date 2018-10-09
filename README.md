@@ -110,6 +110,25 @@ end
 All event options are support, for more details see: []
 
 ## Changelog
+
+### 0.1.2 (2018-10-09)
+
+New features:
+
+* Test mode now supported as configuration.
+* The `:error_handler` setting now allows you to set a minimum level.
+  (Default: `:info`, possible: `:debug`, `:info`, `:warn`, and `:error`)
+* Add `:dsn_refresh` config for refreshing the host name.
+  (Default: `:ttl`, possible: `:ttl` and `<integer>`. (seconds))
+
+Optimizations:
+
+* DNS lookup only updates header on change.
+
+Fixes:
+
+* Functions with default arguments are now properly overwritten.
+
 ### 0.1.0 (2018-10-07)
 
 New features:
