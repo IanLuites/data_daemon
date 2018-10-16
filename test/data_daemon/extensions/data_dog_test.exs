@@ -3,7 +3,7 @@ defmodule DataDaemon.Extensions.DataDogTest do
   alias DataDaemon.TestDaemon
 
   defmodule Example do
-    use DataDaemon, otp_app: :data_daemon, extensions: :datadog, test_mode: true
+    use DataDaemon, otp_app: :data_daemon, extensions: :datadog, mode: :test
   end
 
   setup do

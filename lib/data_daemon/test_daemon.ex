@@ -10,11 +10,8 @@ defmodule DataDaemon.TestDaemon do
   @doc false
   @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
           :ok | {:error, atom}
-  def metric(reporter, key, value, type, opts \\ []) do
-    Agent.update(reporter, &[:erlang.iolist_to_binary(package(key, value, type, opts)) | &1])
-
-    :ok
-  end
+  def metric(reporter, key, value, type, opts \\ []),
+    do: Agent.update(reporter, &[:erlang.iolist_to_binary(package(key, value, type, opts)) | &1])
 
   @doc false
   @spec reported(module) :: String.t() | nil
