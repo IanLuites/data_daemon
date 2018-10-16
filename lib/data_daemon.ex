@@ -71,26 +71,26 @@ defmodule DataDaemon do
     datadog: DataDaemon.Extensions.DataDog
   }
 
+  import DataDaemon.Util, only: [config: 5, package: 4]
+
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
-
-    main_module =
-      !(opts[:test_mode] ||
-          Keyword.get(Application.get_env(otp_app, __CALLER__.module, []), :test_mode, false))
+    config = fn setting, default -> config(opts, otp_app, __CALLER__.module, setting, default) end
+    namespace = if ns = config.(:namespace, nil), do: String.replace(ns, ~r/^(.*?)\.*$/, "\\1.")
+    decorators = if config.(:decorators, true), do: __MODULE__.Decorators.enable()
+    plug = if config.(:plug, true) && Code.ensure_loaded?(Plug), do: __MODULE__.Plug.enable()
+    tags = config.(:tags, [])
 
     mode =
-      if main_module,
-        do: quote(do: alias(DataDaemon, as: DataDaemonDriver)),
-        else: quote(do: alias(DataDaemon.TestDaemon, as: DataDaemonDriver))
-
-    decorators = if Keyword.get(opts, :decorators, true), do: __MODULE__.Decorators.enable()
-
-    plug =
-      if Keyword.get(opts, :plug, true) && Code.ensure_loaded?(Plug), do: __MODULE__.Plug.enable()
+      case config.(:mode, :send) do
+        :send -> quote(do: alias(DataDaemon, as: DataDaemonDriver))
+        :log -> quote(do: alias(DataDaemon.LogDaemon, as: DataDaemonDriver))
+        :test -> quote(do: alias(DataDaemon.TestDaemon, as: DataDaemonDriver))
+      end
 
     extensions =
-      case opts[:extensions] do
+      case config.(:extensions, []) do
         nil -> []
         extensions when is_list(extensions) -> Enum.map(extensions, &(@extensions[&1] || &1))
         extension -> [@extensions[extension] || extension]
@@ -192,6 +192,20 @@ defmodule DataDaemon do
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
       def metric(key, value, type, opts \\ []),
+        do:
+          send_metric(
+            unquote(if namespace, do: quote(do: [unquote(namespace), key]), else: quote(do: key)),
+            value,
+            type,
+            unquote(
+              if tags == [],
+                do: quote(do: opts),
+                else:
+                  quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
+            )
+          )
+
+      defp send_metric(key, value, type, opts),
         do: DataDaemonDriver.metric(__MODULE__, key, value, type, opts)
     end
   end
@@ -207,7 +221,6 @@ defmodule DataDaemon do
     }
   end
 
-  import DataDaemon.Util, only: [package: 4]
   alias DataDaemon.Hound
 
   @doc false
