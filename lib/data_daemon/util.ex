@@ -46,4 +46,18 @@ defmodule DataDaemon.Util do
   def iso8601(ts = %NaiveDateTime{}), do: NaiveDateTime.to_iso8601(ts) <> "Z"
   def iso8601(ts = %DateTime{}), do: DateTime.to_iso8601(ts)
   def iso8601(ts) when is_integer(ts), do: iso8601(NaiveDateTime.add(@unix, ts, :millisecond))
+
+  @doc ~S"""
+  Fetch a setting from either the passed options or the application config.
+  """
+  @spec config(Keyword.t(), atom, atom, atom, any) :: any
+  def config(opts, app, key, setting, default \\ nil) do
+    Keyword.get_lazy(
+      opts,
+      setting,
+      fn ->
+        Keyword.get(Application.get_env(app, key, []), setting, default)
+      end
+    )
+  end
 end
