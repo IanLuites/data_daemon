@@ -1,6 +1,6 @@
 defmodule DataDaemon.Extensions.DataDog do
   @moduledoc false
-  import DataDaemon.Util, only: [iso8601: 1]
+  import DataDaemon.Util, only: [config: 5, iso8601: 1]
 
   @event_fields ~w(
     timestamp
@@ -58,7 +58,9 @@ defmodule DataDaemon.Extensions.DataDog do
     :ok
   end
 
-  defmacro __using__(_opts \\ []) do
+  defmacro __using__(opts \\ []) do
+    tags = config(opts, opts[:otp_app], __CALLER__.module, :tags, [])
+
     quote location: :keep do
       @doc ~S"""
       Distribution tracks the statistical distribution of a set of values across your infrastructure.
@@ -86,11 +88,15 @@ defmodule DataDaemon.Extensions.DataDog do
       def event(title, text, opts \\ []) do
         text = String.replace(text, "\n", "\\n")
 
-        metric(
+        send_metric(
           "_e{#{String.length(title)},#{String.length(text)}}",
           title,
           build_event(text, opts),
-          opts
+          unquote(
+            if tags == [],
+              do: quote(do: opts),
+              else: quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
+          )
         )
       end
     end
