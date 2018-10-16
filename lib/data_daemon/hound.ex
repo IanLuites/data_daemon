@@ -30,11 +30,11 @@ defmodule DataDaemon.Hound do
     otp = daemon.otp()
 
     {host, port} =
-      if url = Application.fetch_env!(otp, daemon)[:url] do
+      if url = Application.get_env(otp, daemon, [])[:url] do
         uri = URI.parse(url)
         {uri.host, uri.port}
       else
-        {Application.fetch_env!(otp, daemon)[:host] || "localhost",
+        {Application.get_env(otp, daemon, [])[:host] || "localhost",
          resolve_config(otp, daemon, :port, 8_125)}
       end
 
@@ -56,7 +56,8 @@ defmodule DataDaemon.Hound do
 
   @spec resolve_config(atom, module, atom, integer | atom) :: integer | no_return
   defp resolve_config(otp, daemon, option, default) do
-    case Application.fetch_env!(otp, daemon)[option] || default do
+    case Application.get_env(otp, daemon, [])[option] || default do
+      nil -> default
       value when is_integer(value) -> value
       value when is_binary(value) -> String.to_integer(value)
       value when is_atom(value) -> value
