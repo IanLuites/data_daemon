@@ -1,5 +1,6 @@
-lib/data_daemon.ex:228: Function start_link/1 has no local return
-lib/data_daemon.ex:231: The call 'Elixir.Module':concat(_module@1::[atom() | tuple()],'Elixir.Supervisor') will never return since the success typing is (atom() | binary(),atom() | binary()) -> atom() and the contract is (binary() | atom(),binary() | atom()) -> atom()
+lib/data_daemon.ex:230: Function start_link/1 has no local return
+lib/data_daemon.ex:230: Function start_link/2 has no local return
+lib/data_daemon.ex:234: The call 'Elixir.DataDaemon.Hound':child_spec(_module@1::atom(),integer(),integer()) will never return since it differs in the 1st argument from the success typing arguments: ([atom() | tuple()],any(),any())
 lib/data_daemon/hound.ex:11: Invalid type specification for function 'Elixir.DataDaemon.Hound':child_spec/3. The success typing is ([atom() | tuple()],_,_) -> {_,{'poolboy','start_link',[any(),...]},'permanent',5000,'worker',['poolboy',...]}
 lib/data_daemon/hound.ex:212: The pattern 'false' can never match the type 'true'
 lib/data_daemon/extensions/data_dog.ex:55: The call 'Elixir.Logger':add_backend({'Elixir.DataDaemon.Extensions.DataDog.ErrorHandler',{_,_}}) will never return since it differs in the 1st argument from the success typing arguments: (atom())
