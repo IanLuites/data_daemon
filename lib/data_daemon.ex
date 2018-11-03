@@ -71,7 +71,7 @@ defmodule DataDaemon do
     datadog: DataDaemon.Extensions.DataDog
   }
 
-  import DataDaemon.Util, only: [config: 5, package: 4]
+  import DataDaemon.Util, only: [config: 5, package: 4, to_integer!: 1]
 
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
@@ -107,6 +107,8 @@ defmodule DataDaemon do
       )
 
     quote location: :keep do
+      @opts unquote(opts)
+
       ### Base ###
       unquote(mode)
 
@@ -123,8 +125,8 @@ defmodule DataDaemon do
       """
       @spec start_link :: Supervisor.on_start()
       def start_link do
-        Enum.each(unquote(extensions), & &1.init(__MODULE__, unquote(opts)))
-        DataDaemonDriver.start_link(__MODULE__)
+        Enum.each(unquote(extensions), & &1.init(__MODULE__, @opts))
+        DataDaemonDriver.start_link(__MODULE__, @opts)
       end
 
       ### Extensions / Plugs ###
@@ -224,9 +226,13 @@ defmodule DataDaemon do
   alias DataDaemon.Hound
 
   @doc false
-  @spec start_link(module) :: Supervisor.on_start()
-  def start_link(module) do
-    children = [Hound.child_spec(module)]
+  @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
+  def start_link(module, opts \\ []) do
+    hound = config(opts, module.otp, module, :hound, [])
+
+    children = [
+      Hound.child_spec(module, to_integer!(hound[:size] || 1), to_integer!(hound[:overflow] || 5))
+    ]
 
     opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
     Supervisor.start_link(children, opts)

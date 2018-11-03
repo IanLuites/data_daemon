@@ -3,8 +3,8 @@ defmodule DataDaemon.TestDaemon do
   import DataDaemon.Util, only: [package: 4]
 
   @doc false
-  @spec start_link(module) :: Supervisor.on_start()
-  def start_link(module),
+  @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
+  def start_link(module, _opts \\ []),
     do: Agent.start_link(fn -> [] end, name: module)
 
   @doc false
