@@ -60,4 +60,11 @@ defmodule DataDaemon.Util do
       end
     )
   end
+
+  @doc ~S"""
+  Forces a value to integer.
+  """
+  @spec to_integer!(integer | String.t()) :: integer | no_return
+  def to_integer!(value) when is_integer(value), do: value
+  def to_integer!(value) when is_binary(value), do: String.to_integer(value)
 end
