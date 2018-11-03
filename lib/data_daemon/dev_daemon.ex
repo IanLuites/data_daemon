@@ -6,8 +6,8 @@ defmodule DataDaemon.LogDaemon do
   import Logger.Utils, only: [timestamp: 1]
 
   @doc false
-  @spec start_link(module) :: Supervisor.on_start()
-  def start_link(_module), do: {:ok, spawn(fn -> Process.sleep(:infinity) end)}
+  @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
+  def start_link(_module, _opts \\ []), do: {:ok, spawn(fn -> Process.sleep(:infinity) end)}
 
   @doc false
   @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
