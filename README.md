@@ -113,6 +113,10 @@ All event options are support, for more details see: []
 
 ### 0.1.4 (2019-03-25)
 
+New features:
+
+* Allow config overwrite by passing keyword settings to the child spec or start link.
+
 Optimizations:
 
 * Keep using old IP in case DNS refresh fails.
