@@ -20,15 +20,15 @@ defmodule DataDaemon.Hound do
         size: resolve_config(hound, :overflow, 1),
         max_overlow: resolve_config(hound, :size, 5)
       ],
-      pool
+      {pool, opts}
     )
   end
 
   ## Client API
 
   @doc false
-  @spec start_link(module, opts :: Keyword.t()) :: GenServer.on_start()
-  def start_link(daemon, opts \\ []) do
+  @spec start_link({module, opts :: Keyword.t()}) :: GenServer.on_start()
+  def start_link({daemon, opts}) do
     {host, port} =
       if url = opts[:url] do
         uri = URI.parse(url)
@@ -191,14 +191,14 @@ defmodule DataDaemon.Hound do
   end
 
   @doc false
-  @spec host_check!(pid, charlist, integer, tuple, integer | atom) :: :ok | no_return
-  def host_check!(hound, host, port, previous_ip, refresh) do
+  @spec host_check!(pid, charlist, integer, tuple, integer, integer | atom) :: :ok | no_return
+  def host_check!(hound, host, port, previous_ip, previous_ttl, refresh) do
     {ip, ttl} =
       if r = resolve(host) do
         r
       else
         Logger.warn(fn -> "Hound: DNS resolve failed, re-using previous result" end)
-        {previous_ip, refresh}
+        {previous_ip, previous_ttl}
       end
 
     set_refresh(host, port, ip, refresh, ttl)
@@ -223,9 +223,16 @@ defmodule DataDaemon.Hound do
         :no_refresh -> -1
       end
 
-    if next_check > 0,
-      do:
-        :timer.apply_after(next_check, __MODULE__, :host_check!, [self(), host, port, ip, refresh])
+    if next_check > 0 do
+      :timer.apply_after(next_check, __MODULE__, :host_check!, [
+        self(),
+        host,
+        port,
+        ip,
+        ttl,
+        refresh
+      ])
+    end
 
     :ok
   end
