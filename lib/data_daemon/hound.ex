@@ -181,15 +181,27 @@ defmodule DataDaemon.Hound do
   @spec generate_header!(map) :: iodata | no_return
   defp generate_header!(%{host: host, port: port, dns_refresh: refresh}) do
     host = String.to_charlist(host)
-    {ip, ttl} = resolve!(host)
-    set_refresh(host, port, ip, refresh, ttl)
-    build_header(ip, port)
+
+    if resolved = resolve(host) do
+      {ip, ttl} = resolved
+      set_refresh(host, port, ip, refresh, ttl)
+      build_header(ip, port)
+    else
+      raise "DataDog: Hound: Start failed, couldn't resolve host."
+    end
   end
 
   @doc false
   @spec host_check!(pid, charlist, integer, tuple, integer | atom) :: :ok | no_return
   def host_check!(hound, host, port, previous_ip, refresh) do
-    {ip, ttl} = resolve!(host)
+    {ip, ttl} =
+      if r = resolve(host) do
+        r
+      else
+        Logger.warn(fn -> "Hound: DNS resolve failed, re-using previous result" end)
+        {previous_ip, refresh}
+      end
+
     set_refresh(host, port, ip, refresh, ttl)
 
     if ip != previous_ip do
@@ -219,15 +231,26 @@ defmodule DataDaemon.Hound do
     :ok
   end
 
-  @spec resolve!(charlist) :: {tuple, integer} | no_return
-  defp resolve!(host) do
-    with {:ok, {:dns_rec, _, _, [record | _], _, _}} <- :inet_res.resolve(host, :in, :a),
-         {:dns_rr, _, :a, :in, _, ttl, ip, _, _, _} <- record do
-      {ip, ttl}
-    else
-      _ -> raise "Host #{host} can not be resolved."
+  @spec resolve(charlist) :: {tuple, integer} | nil
+  defp resolve(host) do
+    case :inet_res.resolve(host, :in, :a) do
+      {:ok, {:dns_rec, _, _, records, _, _}} ->
+        if result = Enum.find_value(records, &match_resolve/1) do
+          result
+        else
+          Logger.error(fn -> "Hound: Missing resolve record: #{inspect(records)}" end)
+          nil
+        end
+
+      invalid ->
+        Logger.error(fn -> "Hound: Resolve failed: #{inspect(invalid)}" end)
+        nil
     end
   end
+
+  @spec resolve(tuple) :: {tuple, integer} | nil
+  defp match_resolve({:dns_rr, _, :a, :in, _, ttl, ip, _, _, _}), do: {ip, ttl}
+  defp match_resolve(_), do: nil
 
   @spec build_header(tuple, integer) :: iodata
   defp build_header({ip1, ip2, ip3, ip4}, port) do
