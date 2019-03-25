@@ -117,16 +117,17 @@ defmodule DataDaemon do
       def otp, do: unquote(otp_app)
 
       @doc false
-      @spec child_spec(any) :: map
-      def child_spec(_), do: DataDaemon.child_spec(__MODULE__)
+      @spec child_spec(opts :: Keyword.t()) :: map
+      def child_spec(opts \\ []), do: DataDaemon.child_spec(__MODULE__, opts)
 
       @doc ~S"""
       Start the DataDaemon.
       """
-      @spec start_link :: Supervisor.on_start()
-      def start_link do
-        Enum.each(unquote(extensions), & &1.init(__MODULE__, @opts))
-        DataDaemonDriver.start_link(__MODULE__, @opts)
+      @spec start_link(opts :: Keyword.t()) :: Supervisor.on_start()
+      def start_link(opts \\ []) do
+        options = Keyword.merge(@opts, opts)
+        Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
+        DataDaemonDriver.start_link(__MODULE__, options)
       end
 
       ### Extensions / Plugs ###
@@ -215,11 +216,11 @@ defmodule DataDaemon do
   ### Connection Logic ###
 
   @doc false
-  @spec child_spec(module) :: map
-  def child_spec(module) do
+  @spec child_spec(module, opts :: Keyword.t()) :: map
+  def child_spec(module, opts \\ []) do
     %{
       id: module,
-      start: {module, :start_link, []}
+      start: {module, :start_link, [opts]}
     }
   end
 
