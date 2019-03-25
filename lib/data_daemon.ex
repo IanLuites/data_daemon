@@ -71,11 +71,12 @@ defmodule DataDaemon do
     datadog: DataDaemon.Extensions.DataDog
   }
 
-  import DataDaemon.Util, only: [config: 5, package: 4, to_integer!: 1]
+  import DataDaemon.Util, only: [config: 5, package: 4]
 
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
+    otp_config = Application.get_env(otp_app, __CALLER__.module, [])
     config = fn setting, default -> config(opts, otp_app, __CALLER__.module, setting, default) end
     namespace = if ns = config.(:namespace, nil), do: String.replace(ns, ~r/^(.*?)\.*$/, "\\1.")
     decorators = if config.(:decorators, true), do: __MODULE__.Decorators.enable()
@@ -106,8 +107,10 @@ defmodule DataDaemon do
         end
       )
 
+    hound_config = Keyword.merge(opts[:hound] || [], otp_config[:hound] || [])
+
     quote location: :keep do
-      @opts unquote(opts)
+      @opts unquote(opts |> Keyword.merge(otp_config) |> Keyword.put(:hound, hound_config))
 
       ### Base ###
       unquote(mode)
@@ -229,10 +232,8 @@ defmodule DataDaemon do
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
   def start_link(module, opts \\ []) do
-    hound = config(opts, module.otp, module, :hound, [])
-
     children = [
-      Hound.child_spec(module, to_integer!(hound[:size] || 1), to_integer!(hound[:overflow] || 5))
+      Hound.child_spec(module, opts)
     ]
 
     opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]

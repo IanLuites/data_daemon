@@ -8,15 +8,17 @@ defmodule DataDaemon.Hound do
   @delimiter_size 1
 
   @doc false
-  @spec child_spec(atom, non_neg_integer, non_neg_integer) :: Supervisor.child_spec()
-  def child_spec(pool, size \\ 1, overflow \\ 5) do
+  @spec child_spec(atom, opts :: Keyword.t()) :: Supervisor.child_spec()
+  def child_spec(pool, opts \\ []) do
+    hound = opts[:hound] || []
+
     :poolboy.child_spec(
       pool,
       [
         name: {:local, pool},
         worker_module: __MODULE__,
-        size: size,
-        max_overlow: overflow
+        size: resolve_config(hound, :overflow, 1),
+        max_overlow: resolve_config(hound, :size, 5)
       ],
       pool
     )
@@ -25,38 +27,35 @@ defmodule DataDaemon.Hound do
   ## Client API
 
   @doc false
-  @spec start_link(module) :: GenServer.on_start()
-  def start_link(daemon) do
-    otp = daemon.otp()
-
+  @spec start_link(module, opts :: Keyword.t()) :: GenServer.on_start()
+  def start_link(daemon, opts \\ []) do
     {host, port} =
-      if url = Application.get_env(otp, daemon, [])[:url] do
+      if url = opts[:url] do
         uri = URI.parse(url)
         {uri.host, uri.port}
       else
-        {Application.get_env(otp, daemon, [])[:host] || "localhost",
-         resolve_config(otp, daemon, :port, 8_125)}
+        {opts[:host] || "localhost", resolve_config(opts, :port, 8_125)}
       end
 
     GenServer.start_link(
       __MODULE__,
       %{
         socket: nil,
-        otp: otp,
+        opts: opts,
         daemon: daemon,
-        udp_wait: resolve_config(otp, daemon, :udp_wait, 5_000),
-        udp_size: resolve_config(otp, daemon, :udp_size, 1_472),
+        udp_wait: resolve_config(opts, :udp_wait, 5_000),
+        udp_size: resolve_config(opts, :udp_size, 1_472),
         host: host,
         port: port,
-        dns_refresh: resolve_config(otp, daemon, :dns_refresh, :ttl)
+        dns_refresh: resolve_config(opts, :dns_refresh, :ttl)
       },
       []
     )
   end
 
-  @spec resolve_config(atom, module, atom, integer | atom) :: integer | no_return
-  defp resolve_config(otp, daemon, option, default) do
-    case Application.get_env(otp, daemon, [])[option] || default do
+  @spec resolve_config(Keyword.t(), atom, integer | atom) :: integer | no_return
+  defp resolve_config(opts, option, default) do
+    case opts[option] || default do
       nil -> default
       value when is_integer(value) -> value
       value when is_binary(value) -> String.to_integer(value)
