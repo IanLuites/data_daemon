@@ -68,7 +68,8 @@ defmodule DataDaemon do
   @type tags :: [tag | {tag, tag}]
 
   @extensions %{
-    datadog: DataDaemon.Extensions.DataDog
+    datadog: DataDaemon.Extensions.DataDog,
+    erlang_vm: DataDaemon.Extensions.VM
   }
 
   import DataDaemon.Util, only: [config: 5, package: 4]
