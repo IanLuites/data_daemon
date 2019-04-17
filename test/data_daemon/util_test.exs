@@ -33,4 +33,49 @@ defmodule DataDaemon.UtilTest do
                "key:1|c|#config:tagged"
     end
   end
+
+  describe "config/5" do
+    test "from passed options" do
+      assert config([setting: "opts"], :data_daemon, TestExample, :setting, "default") == "opts"
+    end
+
+    test "from app config options" do
+      assert config([], :data_daemon, TestExample, :setting, "default") == "config"
+    end
+
+    test "from default" do
+      assert config([], :data_daemon, TestExample, :settings, "default") == "default"
+    end
+
+    test "from env var" do
+      :meck.new(System, [:passthrough])
+      :meck.expect(System, :get_env, fn "SETTING" -> "ENV_VAR" end)
+      on_exit(&:meck.unload/0)
+
+      assert config(
+               [setting: {:system, "SETTING"}],
+               :data_daemon,
+               TestExample,
+               :setting,
+               "default"
+             ) == "ENV_VAR"
+    end
+  end
+
+  describe "to_integer!/1" do
+    test "keeps int as int" do
+      assert to_integer!(5) == 5
+    end
+
+    test "converts string int to int" do
+      assert to_integer!("5") == 5
+    end
+
+    test "{:system, <var>} into an integer" do
+      :meck.new(System, [:passthrough])
+      :meck.expect(System, :get_env, fn "INTEGER" -> "5" end)
+      on_exit(&:meck.unload/0)
+      assert to_integer!({:system, "INTEGER"}) == 5
+    end
+  end
 end

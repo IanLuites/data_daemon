@@ -128,7 +128,11 @@ defmodule DataDaemon do
       """
       @spec start_link(opts :: Keyword.t()) :: Supervisor.on_start()
       def start_link(opts \\ []) do
-        options = Keyword.merge(@opts, opts)
+        options =
+          @opts
+          |> Keyword.merge(Application.get_env(otp(), __MODULE__, []))
+          |> Keyword.merge(opts)
+
         Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
         DataDaemonDriver.start_link(__MODULE__, options)
       end
@@ -227,12 +231,13 @@ defmodule DataDaemon do
     }
   end
 
-  alias DataDaemon.Hound
+  alias DataDaemon.{Hound, Resolver}
 
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
   def start_link(module, opts \\ []) do
     children = [
+      Resolver.child_spec(module, opts),
       Hound.child_spec(module, opts)
     ]
 
