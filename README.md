@@ -111,6 +111,31 @@ All event options are support, for more details see: []
 
 ## Changelog
 
+### 0.1.4 (2019-03-25)
+
+New features:
+
+* Allow config overwrite by passing keyword settings to the child spec or start link.
+
+Optimizations:
+
+* Keep using old IP in case DNS refresh fails.
+* Added extra logging around DNS failures.
+
+### 0.1.3 (2018-11-03)
+
+New features:
+
+* The `:hound` setting now allows you to set the pool settings.
+
+Optimizations:
+
+* DNS lookup only updates header on change.
+
+Fixes:
+
+* Functions with default arguments are now properly overwritten.
+
 ### 0.1.2 (2018-10-09)
 
 New features:

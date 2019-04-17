@@ -8,55 +8,54 @@ defmodule DataDaemon.Hound do
   @delimiter_size 1
 
   @doc false
-  @spec child_spec(atom, non_neg_integer, non_neg_integer) :: Supervisor.child_spec()
-  def child_spec(pool, size \\ 1, overflow \\ 5) do
+  @spec child_spec(atom, opts :: Keyword.t()) :: Supervisor.child_spec()
+  def child_spec(pool, opts \\ []) do
+    hound = opts[:hound] || []
+
     :poolboy.child_spec(
       pool,
       [
         name: {:local, pool},
         worker_module: __MODULE__,
-        size: size,
-        max_overlow: overflow
+        size: resolve_config(hound, :overflow, 1),
+        max_overlow: resolve_config(hound, :size, 5)
       ],
-      pool
+      {pool, opts}
     )
   end
 
   ## Client API
 
   @doc false
-  @spec start_link(module) :: GenServer.on_start()
-  def start_link(daemon) do
-    otp = daemon.otp()
-
+  @spec start_link({module, opts :: Keyword.t()}) :: GenServer.on_start()
+  def start_link({daemon, opts}) do
     {host, port} =
-      if url = Application.get_env(otp, daemon, [])[:url] do
+      if url = opts[:url] do
         uri = URI.parse(url)
         {uri.host, uri.port}
       else
-        {Application.get_env(otp, daemon, [])[:host] || "localhost",
-         resolve_config(otp, daemon, :port, 8_125)}
+        {opts[:host] || "localhost", resolve_config(opts, :port, 8_125)}
       end
 
     GenServer.start_link(
       __MODULE__,
       %{
         socket: nil,
-        otp: otp,
+        opts: opts,
         daemon: daemon,
-        udp_wait: resolve_config(otp, daemon, :udp_wait, 5_000),
-        udp_size: resolve_config(otp, daemon, :udp_size, 1_472),
+        udp_wait: resolve_config(opts, :udp_wait, 5_000),
+        udp_size: resolve_config(opts, :udp_size, 1_472),
         host: host,
         port: port,
-        dns_refresh: resolve_config(otp, daemon, :dns_refresh, :ttl)
+        dns_refresh: resolve_config(opts, :dns_refresh, :ttl)
       },
       []
     )
   end
 
-  @spec resolve_config(atom, module, atom, integer | atom) :: integer | no_return
-  defp resolve_config(otp, daemon, option, default) do
-    case Application.get_env(otp, daemon, [])[option] || default do
+  @spec resolve_config(Keyword.t(), atom, integer | atom) :: integer | no_return
+  defp resolve_config(opts, option, default) do
+    case opts[option] || default do
       nil -> default
       value when is_integer(value) -> value
       value when is_binary(value) -> String.to_integer(value)
@@ -181,15 +180,27 @@ defmodule DataDaemon.Hound do
   @spec generate_header!(map) :: iodata | no_return
   defp generate_header!(%{host: host, port: port, dns_refresh: refresh}) do
     host = String.to_charlist(host)
-    {ip, ttl} = resolve!(host)
-    set_refresh(host, port, ip, refresh, ttl)
-    build_header(ip, port)
+
+    if resolved = resolve(host) do
+      {ip, ttl} = resolved
+      set_refresh(host, port, ip, refresh, ttl)
+      build_header(ip, port)
+    else
+      raise "DataDog: Hound: Start failed, couldn't resolve host."
+    end
   end
 
   @doc false
-  @spec host_check!(pid, charlist, integer, tuple, integer | atom) :: :ok | no_return
-  def host_check!(hound, host, port, previous_ip, refresh) do
-    {ip, ttl} = resolve!(host)
+  @spec host_check!(pid, charlist, integer, tuple, integer, integer | atom) :: :ok | no_return
+  def host_check!(hound, host, port, previous_ip, previous_ttl, refresh) do
+    {ip, ttl} =
+      if r = resolve(host) do
+        r
+      else
+        Logger.warn(fn -> "Hound: DNS resolve failed, re-using previous result" end)
+        {previous_ip, previous_ttl}
+      end
+
     set_refresh(host, port, ip, refresh, ttl)
 
     if ip != previous_ip do
@@ -212,22 +223,40 @@ defmodule DataDaemon.Hound do
         :no_refresh -> -1
       end
 
-    if next_check > 0,
-      do:
-        :timer.apply_after(next_check, __MODULE__, :host_check!, [self(), host, port, ip, refresh])
+    if next_check > 0 do
+      :timer.apply_after(next_check, __MODULE__, :host_check!, [
+        self(),
+        host,
+        port,
+        ip,
+        ttl,
+        refresh
+      ])
+    end
 
     :ok
   end
 
-  @spec resolve!(charlist) :: {tuple, integer} | no_return
-  defp resolve!(host) do
-    with {:ok, {:dns_rec, _, _, [record | _], _, _}} <- :inet_res.resolve(host, :in, :a),
-         {:dns_rr, _, :a, :in, _, ttl, ip, _, _, _} <- record do
-      {ip, ttl}
-    else
-      _ -> raise "Host #{host} can not be resolved."
+  @spec resolve(charlist) :: {tuple, integer} | nil
+  defp resolve(host) do
+    case :inet_res.resolve(host, :in, :a) do
+      {:ok, {:dns_rec, _, _, records, _, _}} ->
+        if result = Enum.find_value(records, &match_resolve/1) do
+          result
+        else
+          Logger.error(fn -> "Hound: Missing resolve record: #{inspect(records)}" end)
+          nil
+        end
+
+      invalid ->
+        Logger.error(fn -> "Hound: Resolve failed: #{inspect(invalid)}" end)
+        nil
     end
   end
+
+  @spec resolve(tuple) :: {tuple, integer} | nil
+  defp match_resolve({:dns_rr, _, :a, :in, _, ttl, ip, _, _, _}), do: {ip, ttl}
+  defp match_resolve(_), do: nil
 
   @spec build_header(tuple, integer) :: iodata
   defp build_header({ip1, ip2, ip3, ip4}, port) do

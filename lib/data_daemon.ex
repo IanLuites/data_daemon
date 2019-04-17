@@ -71,11 +71,12 @@ defmodule DataDaemon do
     datadog: DataDaemon.Extensions.DataDog
   }
 
-  import DataDaemon.Util, only: [config: 5, package: 4, to_integer!: 1]
+  import DataDaemon.Util, only: [config: 5, package: 4]
 
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
     otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
+    otp_config = Application.get_env(otp_app, __CALLER__.module, [])
     config = fn setting, default -> config(opts, otp_app, __CALLER__.module, setting, default) end
     namespace = if ns = config.(:namespace, nil), do: String.replace(ns, ~r/^(.*?)\.*$/, "\\1.")
     decorators = if config.(:decorators, true), do: __MODULE__.Decorators.enable()
@@ -106,8 +107,10 @@ defmodule DataDaemon do
         end
       )
 
+    hound_config = Keyword.merge(opts[:hound] || [], otp_config[:hound] || [])
+
     quote location: :keep do
-      @opts unquote(opts)
+      @opts unquote(opts |> Keyword.merge(otp_config) |> Keyword.put(:hound, hound_config))
 
       ### Base ###
       unquote(mode)
@@ -117,16 +120,17 @@ defmodule DataDaemon do
       def otp, do: unquote(otp_app)
 
       @doc false
-      @spec child_spec(any) :: map
-      def child_spec(_), do: DataDaemon.child_spec(__MODULE__)
+      @spec child_spec(opts :: Keyword.t()) :: map
+      def child_spec(opts \\ []), do: DataDaemon.child_spec(__MODULE__, opts)
 
       @doc ~S"""
       Start the DataDaemon.
       """
-      @spec start_link :: Supervisor.on_start()
-      def start_link do
-        Enum.each(unquote(extensions), & &1.init(__MODULE__, @opts))
-        DataDaemonDriver.start_link(__MODULE__, @opts)
+      @spec start_link(opts :: Keyword.t()) :: Supervisor.on_start()
+      def start_link(opts \\ []) do
+        options = Keyword.merge(@opts, opts)
+        Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
+        DataDaemonDriver.start_link(__MODULE__, options)
       end
 
       ### Extensions / Plugs ###
@@ -215,11 +219,11 @@ defmodule DataDaemon do
   ### Connection Logic ###
 
   @doc false
-  @spec child_spec(module) :: map
-  def child_spec(module) do
+  @spec child_spec(module, opts :: Keyword.t()) :: map
+  def child_spec(module, opts \\ []) do
     %{
       id: module,
-      start: {module, :start_link, []}
+      start: {module, :start_link, [opts]}
     }
   end
 
@@ -228,10 +232,8 @@ defmodule DataDaemon do
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
   def start_link(module, opts \\ []) do
-    hound = config(opts, module.otp, module, :hound, [])
-
     children = [
-      Hound.child_spec(module, to_integer!(hound[:size] || 1), to_integer!(hound[:overflow] || 5))
+      Hound.child_spec(module, opts)
     ]
 
     opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
