@@ -17,7 +17,7 @@ defmodule DataDaemonTest do
   describe "start_link/1" do
     setup do
       :meck.new(Supervisor)
-      :meck.expect(Supervisor, :start_link, fn [child], _opts -> child end)
+      :meck.expect(Supervisor, :start_link, fn children, _opts -> children end)
       on_exit(&:meck.unload/0)
     end
 
@@ -26,15 +26,15 @@ defmodule DataDaemonTest do
     end
 
     test "parses configured pool (hound) size" do
-      {_, {:poolboy, :start_link, [opts | _]}, _, _, _, _} = Example.start_link()
+      [_, {_, {:poolboy, :start_link, [opts | _]}, _, _, _, _}] = Example.start_link()
 
       assert opts[:size] == 2
     end
 
     test "parses configured pool (hound) overflow" do
-      {_, {:poolboy, :start_link, [opts | _]}, _, _, _, _} = Example.start_link()
+      [_, {_, {:poolboy, :start_link, [opts | _]}, _, _, _, _}] = Example.start_link()
 
-      assert opts[:max_overlow] == 10
+      assert opts[:max_overflow] == 10
     end
   end
 
