@@ -1,7 +1,9 @@
 {
   "skip_files": [
+    "lib/data_daemon/extensions/vm.ex",
     "lib/data_daemon/hound.ex",
-    "lib/data_daemon/plug.ex"
+    "lib/data_daemon/plug.ex",
+    "lib/data_daemon/resolver.ex"
   ],
   "custom_stop_words": [
     "\\\\\\\\",

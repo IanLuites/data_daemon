@@ -68,7 +68,8 @@ defmodule DataDaemon do
   @type tags :: [tag | {tag, tag}]
 
   @extensions %{
-    datadog: DataDaemon.Extensions.DataDog
+    datadog: DataDaemon.Extensions.DataDog,
+    erlang_vm: DataDaemon.Extensions.VM
   }
 
   import DataDaemon.Util, only: [config: 5, package: 4]
@@ -128,9 +129,15 @@ defmodule DataDaemon do
       """
       @spec start_link(opts :: Keyword.t()) :: Supervisor.on_start()
       def start_link(opts \\ []) do
-        options = Keyword.merge(@opts, opts)
-        Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
-        DataDaemonDriver.start_link(__MODULE__, options)
+        options =
+          @opts
+          |> Keyword.merge(Application.get_env(otp(), __MODULE__, []))
+          |> Keyword.merge(opts)
+
+        with started = {:ok, _} <- DataDaemonDriver.start_link(__MODULE__, options) do
+          Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
+          started
+        end
       end
 
       ### Extensions / Plugs ###
@@ -227,12 +234,13 @@ defmodule DataDaemon do
     }
   end
 
-  alias DataDaemon.Hound
+  alias DataDaemon.{Hound, Resolver}
 
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
   def start_link(module, opts \\ []) do
     children = [
+      Resolver.child_spec(module, opts),
       Hound.child_spec(module, opts)
     ]
 

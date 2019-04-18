@@ -52,13 +52,16 @@ defmodule DataDaemon.Util do
   """
   @spec config(Keyword.t(), atom, atom, atom, any) :: any
   def config(opts, app, key, setting, default \\ nil) do
-    Keyword.get_lazy(
-      opts,
-      setting,
-      fn ->
-        Keyword.get(Application.get_env(app, key, []), setting, default)
-      end
-    )
+    case Keyword.get_lazy(
+           opts,
+           setting,
+           fn ->
+             Keyword.get(Application.get_env(app, key, []), setting, default)
+           end
+         ) do
+      {:system, var} -> System.get_env(var)
+      val -> val
+    end
   end
 
   @doc ~S"""
@@ -67,4 +70,5 @@ defmodule DataDaemon.Util do
   @spec to_integer!(integer | String.t()) :: integer | no_return
   def to_integer!(value) when is_integer(value), do: value
   def to_integer!(value) when is_binary(value), do: String.to_integer(value)
+  def to_integer!({:system, var}), do: to_integer!(System.get_env(var))
 end

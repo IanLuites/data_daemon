@@ -2,6 +2,7 @@ defmodule DataDaemon.Hound do
   @moduledoc false
   use GenServer
   require Logger
+  alias DataDaemon.Resolver
 
   @header_size 7
   @delimiter "\n"
@@ -17,8 +18,8 @@ defmodule DataDaemon.Hound do
       [
         name: {:local, pool},
         worker_module: __MODULE__,
-        size: resolve_config(hound, :overflow, 1),
-        max_overlow: resolve_config(hound, :size, 5)
+        size: resolve_config(hound, :size, 1),
+        max_overflow: resolve_config(hound, :overflow, 5)
       ],
       {pool, opts}
     )
@@ -29,25 +30,15 @@ defmodule DataDaemon.Hound do
   @doc false
   @spec start_link({module, opts :: Keyword.t()}) :: GenServer.on_start()
   def start_link({daemon, opts}) do
-    {host, port} =
-      if url = opts[:url] do
-        uri = URI.parse(url)
-        {uri.host, uri.port}
-      else
-        {opts[:host] || "localhost", resolve_config(opts, :port, 8_125)}
-      end
-
     GenServer.start_link(
       __MODULE__,
       %{
         socket: nil,
         opts: opts,
         daemon: daemon,
+        resolver: Module.concat(daemon, "Resolver"),
         udp_wait: resolve_config(opts, :udp_wait, 5_000),
-        udp_size: resolve_config(opts, :udp_size, 1_472),
-        host: host,
-        port: port,
-        dns_refresh: resolve_config(opts, :dns_refresh, :ttl)
+        udp_size: resolve_config(opts, :udp_size, 1_472)
       },
       []
     )
@@ -67,9 +58,9 @@ defmodule DataDaemon.Hound do
   ## Server API
 
   @impl GenServer
-  def init(state) do
-    Process.flag(:trap_exit, true)
-    header = generate_header!(state)
+  def init(state = %{resolver: resolver}) do
+    {ip, port} = Resolver.host(resolver)
+    header = build_header(ip, port)
 
     state =
       Map.merge(state, %{
@@ -92,8 +83,8 @@ defmodule DataDaemon.Hound do
   end
 
   @impl GenServer
-  def handle_info({:refresh_header, header}, state) do
-    {:noreply, %{state | header: header}}
+  def handle_info({:refresh_header, ip, port}, state) do
+    {:noreply, %{state | header: build_header(ip, port)}}
   end
 
   def handle_info(:force_send, state = %{socket: socket, buffer: buffer, header: header}) do
@@ -176,87 +167,6 @@ defmodule DataDaemon.Hound do
 
   @spec send_buffer(:gen_udp.socket(), iodata) :: boolean
   defp send_buffer(socket, buffer), do: Port.command(socket, buffer)
-
-  @spec generate_header!(map) :: iodata | no_return
-  defp generate_header!(%{host: host, port: port, dns_refresh: refresh}) do
-    host = String.to_charlist(host)
-
-    if resolved = resolve(host) do
-      {ip, ttl} = resolved
-      set_refresh(host, port, ip, refresh, ttl)
-      build_header(ip, port)
-    else
-      raise "DataDog: Hound: Start failed, couldn't resolve host."
-    end
-  end
-
-  @doc false
-  @spec host_check!(pid, charlist, integer, tuple, integer, integer | atom) :: :ok | no_return
-  def host_check!(hound, host, port, previous_ip, previous_ttl, refresh) do
-    {ip, ttl} =
-      if r = resolve(host) do
-        r
-      else
-        Logger.warn(fn -> "Hound: DNS resolve failed, re-using previous result" end)
-        {previous_ip, previous_ttl}
-      end
-
-    set_refresh(host, port, ip, refresh, ttl)
-
-    if ip != previous_ip do
-      send(
-        hound,
-        {:refresh_header, build_header(ip, port)}
-      )
-    end
-
-    :ok
-  end
-
-  @spec set_refresh(charlist, integer, tuple, integer | atom, integer) :: :ok
-  defp set_refresh(host, port, ip, refresh, ttl) do
-    next_check =
-      cond do
-        refresh == :infinity -> -1
-        is_integer(refresh) -> refresh * 1_000
-        is_integer(ttl) -> ttl * 1_000
-        :no_refresh -> -1
-      end
-
-    if next_check > 0 do
-      :timer.apply_after(next_check, __MODULE__, :host_check!, [
-        self(),
-        host,
-        port,
-        ip,
-        ttl,
-        refresh
-      ])
-    end
-
-    :ok
-  end
-
-  @spec resolve(charlist) :: {tuple, integer} | nil
-  defp resolve(host) do
-    case :inet_res.resolve(host, :in, :a) do
-      {:ok, {:dns_rec, _, _, records, _, _}} ->
-        if result = Enum.find_value(records, &match_resolve/1) do
-          result
-        else
-          Logger.error(fn -> "Hound: Missing resolve record: #{inspect(records)}" end)
-          nil
-        end
-
-      invalid ->
-        Logger.error(fn -> "Hound: Resolve failed: #{inspect(invalid)}" end)
-        nil
-    end
-  end
-
-  @spec resolve(tuple) :: {tuple, integer} | nil
-  defp match_resolve({:dns_rr, _, :a, :in, _, ttl, ip, _, _, _}), do: {ip, ttl}
-  defp match_resolve(_), do: nil
 
   @spec build_header(tuple, integer) :: iodata
   defp build_header({ip1, ip2, ip3, ip4}, port) do
