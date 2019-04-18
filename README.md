@@ -19,7 +19,7 @@ defmodule Sample.DataDog do
   @moduledoc ~S"My DataDog reporter."
   use DataDaemon,
     otp_app: :my_app,
-    extensions: [:datadog]
+    extensions: [:datadog, :erlang_vm]
 end
 
 defmodule Sample.App do
@@ -109,7 +109,54 @@ end
 
 All event options are support, for more details see: []
 
+### Erlang VM
+
+An Erlang VM extension is available logging Erlang VM stats/metrics every minute.
+
+The reporting interval can be configured with the `:rate` (in millisecond) inside the `:erlang_vm` config.
+
+Example: `config :my_app, MyDaemon, erlang_vm: [rate: 1_000]` for updates every second.
+
+The following metrics are tracked:
+
+ * `vm.process.count`, the current process count.
+ * `vm.process.limit`, the current process limit.
+ * `vm.process.queue`, the current amount of processes queued for running.
+ * `vm.port.count`, the current port count.
+ * `vm.port.limit`, the current port limit.
+ * `vm.atom.count`, the current atom count.
+ * `vm.atom.limit`, the current atom limit.
+ * `vm.error.queue`, the amount of process messages queued for the error logger.
+ * `vm.uptime`, erlang uptime.
+ * `vm.reductions`, amount of reductions.
+ * `vm.message.queue`, total queued messages over all processes.
+ * `vm.modules`, current amount of loaded modules.
+ * `vm.memory.total`, total memory use in Kb.
+ * `vm.memory.processes`, total process memory chunk use in Kb.
+ * `vm.memory.processes_used`, total process memory use in Kb.
+ * `vm.memory.system`, total system memory use in Kb.
+ * `vm.memory.atom`, total atom memory chunk use in Kb.
+ * `vm.memory.atom_used`, total atom memory use in Kb.
+ * `vm.memory.binary`, total binary memory use in Kb.
+ * `vm.memory.code`, total code memory use in Kb.
+ * `vm.memory.ets`, total ets memory use in Kb.
+ * `vm.io.in`, total IO input in Kb.
+ * `vm.io.out`, total IO output in Kb.
+ * `vm.garbage_collection.count`, number of garbage collections.
+ * `vm.garbage_collection.words`, number of words garbage.
+
 ## Changelog
+
+### 0.2.0 (2019-04-17)
+
+New features:
+
+* `:erlang_vm` extension. Logs Erlang VM stats/metrics every minute. (Can be configured)
+
+Optimizations:
+
+* Make config more dynamic.
+* DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
 
 ### 0.1.4 (2019-03-25)
 
