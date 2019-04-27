@@ -4,8 +4,18 @@ defmodule DataDaemon.TestDaemon do
 
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
-  def start_link(module, _opts \\ []),
-    do: Agent.start_link(fn -> [] end, name: module)
+  def start_link(module, opts \\ []) do
+    children = [
+      %{
+        id: State,
+        start: {Agent, :start_link, [fn -> [] end, [name: module]]}
+      }
+      | Keyword.get(opts, :children, [])
+    ]
+
+    opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
+    Supervisor.start_link(children, opts)
+  end
 
   @doc false
   @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
