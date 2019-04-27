@@ -134,7 +134,17 @@ defmodule DataDaemon do
           |> Keyword.merge(Application.get_env(otp(), __MODULE__, []))
           |> Keyword.merge(opts)
 
-        with started = {:ok, _} <- DataDaemonDriver.start_link(__MODULE__, options) do
+        children =
+          Enum.reduce(unquote(extensions), [], fn ext, acc ->
+            if child = ext.child_spec(__MODULE__, options) do
+              [child | acc]
+            else
+              acc
+            end
+          end)
+
+        with started = {:ok, _} <-
+               DataDaemonDriver.start_link(__MODULE__, [{:children, children} | options]) do
           Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
           started
         end
