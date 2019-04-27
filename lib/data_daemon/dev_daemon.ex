@@ -7,7 +7,11 @@ defmodule DataDaemon.LogDaemon do
 
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
-  def start_link(_module, _opts \\ []), do: {:ok, spawn(fn -> Process.sleep(:infinity) end)}
+  def start_link(module, opts \\ []) do
+    children = Keyword.get(opts, :children, [])
+    opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
+    Supervisor.start_link(children, opts)
+  end
 
   @doc false
   @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
