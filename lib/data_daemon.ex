@@ -242,6 +242,7 @@ defmodule DataDaemon do
     children = [
       Resolver.child_spec(module, opts),
       Hound.child_spec(module, opts)
+      | Keyword.get(opts, :children, [])
     ]
 
     opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
