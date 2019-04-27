@@ -3,13 +3,19 @@ defmodule DataDaemon.Extensions.VM do
   use GenServer
 
   @doc false
-  @spec init(module, Keyword.t()) :: :ok
-  def init(daemon, opts) do
+  @spec child_spec(module, Keyword.t()) :: map
+  def child_spec(daemon, opts \\ []) do
     opts = opts[:erlang_vm] || []
-    GenServer.start_link(__MODULE__, daemon: daemon, rate: opts[:rate] || 60_000)
 
-    :ok
+    %{
+      id: Module.concat(daemon, VM),
+      start: {GenServer, :start_link, [__MODULE__, [daemon: daemon, rate: opts[:rate] || 60_000]]}
+    }
   end
+
+  @doc false
+  @spec init(module, Keyword.t()) :: :ok
+  def init(_daemon, _opts), do: :ok
 
   # Not needed
   @doc false
