@@ -147,6 +147,22 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.2.1 (2019-04-27)
+
+New features:
+
+* `:minimum_ttl` option to set a minimum TTL to prevent excessive refreshing. (Default: `1_000`)
+
+Optimizations:
+
+* `:erlang_vm` extension runs as additional child to restart during crashes.
+* Perform actual resolve in async process to prevent deadlock during excessive DNS refresh.
+* DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
+
+Bug fixes:
+
+* Fixes issue where the `:erlang_vm` would link its process not to the DataDaemon, but the calling process.
+
 ### 0.2.0 (2019-04-17)
 
 New features:
