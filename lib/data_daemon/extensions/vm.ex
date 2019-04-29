@@ -53,7 +53,9 @@ defmodule DataDaemon.Extensions.VM do
 
     daemon.gauge("vm.error.queue", error_log())
 
-    daemon.gauge("vm.uptime", :wall_clock |> :erlang.statistics() |> elem(1))
+    {uptime, refresh} = :erlang.statistics(:wall_clock)
+    daemon.gauge("vm.uptime", uptime)
+    daemon.gauge("vm.refresh", refresh)
     daemon.gauge("vm.reductions", :reductions |> :erlang.statistics() |> elem(1))
     daemon.gauge("vm.message.queue", message_queue(Process.list()))
     daemon.gauge("vm.modules", length(:code.all_loaded()))

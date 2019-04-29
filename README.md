@@ -128,6 +128,7 @@ The following metrics are tracked:
  * `vm.atom.limit`, the current atom limit.
  * `vm.error.queue`, the amount of process messages queued for the error logger.
  * `vm.uptime`, erlang uptime.
+ * `vm.refresh`, the amount of time (ms) since last stat check.
  * `vm.reductions`, amount of reductions.
  * `vm.message.queue`, total queued messages over all processes.
  * `vm.modules`, current amount of loaded modules.
@@ -146,6 +147,16 @@ The following metrics are tracked:
  * `vm.garbage_collection.words`, number of words garbage.
 
 ## Changelog
+
+### 0.2.2 (2019-04-29)
+
+New features:
+
+* `vm.refresh` erlang vm metric that tracks time (ms) since last stat check.
+
+Bug fixes:
+
+* Fixes issue where the `vm.uptime` metric wouldn't actually track uptime, but time since last vm check.
 
 ### 0.2.1 (2019-04-27)
 
