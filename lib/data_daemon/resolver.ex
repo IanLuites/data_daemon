@@ -47,12 +47,24 @@ defmodule DataDaemon.Resolver do
         :ttl
       end
 
+    minimum_ttl = to_integer!(config(opts, otp, daemon, :minimum_ttl, 1_000))
+
     Logger.debug(fn -> "DataDaemon: DNS lookup \"#{host}\"" end)
 
-    case resolve(host) do
+    case resolve(host, minimum_ttl) do
       {ip, ttl} ->
         refresh_callback(refresh, ttl)
-        {:ok, %{daemon: daemon, refresh: refresh, host: host, ip: ip, port: port, ttl: ttl}}
+
+        {:ok,
+         %{
+           daemon: daemon,
+           refresh: refresh,
+           host: host,
+           ip: ip,
+           port: port,
+           ttl: ttl,
+           minimum_ttl: minimum_ttl
+         }}
 
       _ ->
         {:error, :could_not_resolve_host}
@@ -65,34 +77,44 @@ defmodule DataDaemon.Resolver do
   end
 
   @impl GenServer
+  def handle_info(:refresh, state = %{host: host, minimum_ttl: minimum_ttl}) do
+    async_lookup(host, minimum_ttl)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:ip, :failed}, state = %{refresh: refresh, ttl: ttl_old}) do
+    refresh_callback(refresh, ttl_old)
+    {:noreply, state}
+  end
+
   def handle_info(
-        :refresh,
+        {:ip, ip, ttl},
         state = %{
           daemon: daemon,
-          host: host,
           ip: ip_old,
           port: port,
-          refresh: refresh,
-          ttl: ttl_old
+          refresh: refresh
         }
       ) do
-    Logger.debug(fn -> "DataDaemon: DNS lookup \"#{host}\"" end)
+    if ip == ip_old, do: notify_hounds(daemon, ip, port)
 
-    case resolve(host) do
-      {ip, ttl} ->
-        if ip == ip_old, do: notify_hounds(daemon, ip, port)
+    refresh_callback(refresh, ttl)
+    {:noreply, %{state | ip: ip, ttl: ttl}}
+  end
 
-        refresh_callback(refresh, ttl)
-        {:noreply, %{state | ip: ip, ttl: ttl}}
+  @spec async_lookup(charlist, non_neg_integer) :: pid
+  defp async_lookup(host, minimum_ttl) do
+    resolver = self()
 
-      _ ->
-        Logger.warn(fn ->
-          "DataDaemon: DNS resolve failed, re-using previous result (\"#{host}\")"
-        end)
+    spawn_link(fn ->
+      Logger.debug(fn -> "DataDaemon: DNS lookup \"#{host}\"" end)
 
-        refresh_callback(refresh, ttl_old)
-        {:noreply, state}
-    end
+      case resolve(host, minimum_ttl) do
+        {ip, ttl} -> send(resolver, {:ip, ip, ttl})
+        _ -> send(resolver, {:ip, :failed})
+      end
+    end)
   end
 
   @spec notify_hounds(module, tuple, non_neg_integer) :: :ok
@@ -103,19 +125,11 @@ defmodule DataDaemon.Resolver do
     )
   end
 
-  @spec resolve(charlist) :: {tuple, integer} | nil
-  defp resolve(host) do
+  @spec resolve(charlist, non_neg_integer) :: {tuple, integer} | nil
+  defp resolve(host, minimum_ttl) do
     case :inet_res.resolve(host, :in, :a) do
       {:ok, {:dns_rec, _, _, records, _, _}} ->
-        if result = Enum.find_value(records, &match_resolve/1) do
-          result
-        else
-          Logger.error(fn ->
-            "DataDaemon: Missing resolve record: #{inspect(records)} (\"#{host}\")"
-          end)
-
-          nil
-        end
+        find_ip_in_records(records, host, minimum_ttl)
 
       invalid ->
         Logger.error(fn -> "DataDaemon: Resolve failed: #{inspect(invalid)} (\"#{host}\")" end)
@@ -123,7 +137,25 @@ defmodule DataDaemon.Resolver do
     end
   end
 
-  @spec resolve(tuple) :: {tuple, integer} | nil
+  @spec find_ip_in_records(list, charlist, non_neg_integer) :: {tuple, integer} | nil
+  defp find_ip_in_records(records, host, minimum_ttl) do
+    case Enum.find_value(records, &match_resolve/1) do
+      {ip, ttl} when ttl < minimum_ttl ->
+        {ip, minimum_ttl}
+
+      {ip, ttl} ->
+        {ip, ttl}
+
+      _ ->
+        Logger.error(fn ->
+          "DataDaemon: Missing resolve record: #{inspect(records)} (\"#{host}\")"
+        end)
+
+        nil
+    end
+  end
+
+  @spec match_resolve(tuple) :: {tuple, integer} | nil
   defp match_resolve({:dns_rr, _, :a, :in, _, ttl, ip, _, _, _}), do: {ip, ttl * 1_000}
   defp match_resolve(_), do: nil
 

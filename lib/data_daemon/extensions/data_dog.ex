@@ -38,6 +38,10 @@ defmodule DataDaemon.Extensions.DataDog do
   defp add_event_opt(:alert_type, type, event), do: [event, "|t:", to_string(type)]
 
   @doc false
+  @spec child_spec(module, Keyword.t()) :: false
+  def child_spec(_daemon, _opts \\ []), do: false
+
+  @doc false
   @spec init(module, Keyword.t()) :: :ok
   def init(daemon, opts \\ []) do
     handler =
