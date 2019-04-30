@@ -119,10 +119,14 @@ defmodule DataDaemon.Resolver do
 
   @spec notify_hounds(module, tuple, non_neg_integer) :: :ok
   defp notify_hounds(daemon, ip, port) do
-    Enum.each(
-      :gen_server.call(daemon, :get_all_workers),
-      fn {_, pid, _, _} -> send(pid, {:refresh_header, ip, port}) end
-    )
+    spawn(fn ->
+      Enum.each(
+        :gen_server.call(daemon, :get_all_workers),
+        fn {_, pid, _, _} -> send(pid, {:refresh_header, ip, port}) end
+      )
+    end)
+
+    :ok
   end
 
   @spec resolve(charlist, non_neg_integer) :: {tuple, integer} | nil

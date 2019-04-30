@@ -148,6 +148,12 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.2.3 (2019-04-30)
+
+Bug fixes:
+
+* Make hound update async to prevent pool-resolver deadlock.
+
 ### 0.2.2 (2019-04-29)
 
 New features:
