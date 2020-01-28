@@ -94,6 +94,23 @@ defmodule DataDaemon.Hound do
 
   def handle_info({:inet_reply, _, :ok}, state), do: {:noreply, state}
 
+  # Network issues, let's resolve and try to _reconnect_
+  def handle_info(
+        {:inet_reply, _, {:error, :einval}},
+        state = %{buffer: buffer, resolver: resolver, socket: socket}
+      ) do
+    if socket, do: :gen_udp.close(socket)
+
+    {ip, port} = Resolver.host(resolver)
+    header = build_header(ip, port)
+
+    if byte_size(buffer) <= @header_size do
+      {:noreply, %{state | buffer: header, header: header, socket: open()}}
+    else
+      {:noreply, %{state | header: header, socket: open()}}
+    end
+  end
+
   def handle_info({:inet_reply, _, {:error, reason}}, state) do
     Logger.error(fn -> ": Reporter Error: #{reason}" end)
     {:noreply, state}
