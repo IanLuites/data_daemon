@@ -63,8 +63,8 @@ defmodule DataDaemon.MixProject do
       {:poolboy, "~> 1.5"},
       {:plug, ">= 0.0.0", optional: true},
       {:meck, "~> 0.8.12", optional: true, runtime: false, only: [:test]},
-      {:analyze, "~> 0.1.3", optional: true, runtime: false, only: [:dev, :test]},
-      {:dialyxir, "~> 1.0.0-rc.6", optional: true, runtime: false, only: :dev}
+      {:analyze, "~> 0.1.10", optional: true, runtime: false, only: [:dev, :test]},
+      {:dialyxir, "~> 1.0.0-rc.7", optional: true, runtime: false, only: :dev}
     ]
   end
 end
