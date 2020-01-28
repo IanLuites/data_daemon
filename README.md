@@ -148,6 +148,12 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.2.4 (2020-01-29)
+
+Bug fixes:
+
+* Make hound resolve and open a new socket on some errors.
+
 ### 0.2.3 (2019-04-30)
 
 Bug fixes:
