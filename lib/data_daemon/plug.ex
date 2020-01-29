@@ -15,7 +15,20 @@ defmodule DataDaemon.Plug do
       import Plug.Conn, only: [register_before_send: 2]
 
       @doc false
-      @spec init(Keyword.t()) :: map
+      @spec init(Keyword.t()) ::
+              atom()
+              | binary()
+              | [atom() | binary() | [any()] | number() | tuple() | map()]
+              | number()
+              | tuple()
+              | %{
+                  (atom()
+                   | binary()
+                   | [any()]
+                   | number()
+                   | tuple()
+                   | map()) => atom() | binary() | [any()] | number() | tuple() | map()
+                }
       @impl Plug
       def init(opts) do
         tags =
