@@ -76,8 +76,12 @@ defmodule DataDaemon do
 
   @doc @moduledoc
   defmacro __using__(opts \\ []) do
-    otp_app = opts[:otp_app] || raise "Must set `otp_app:`."
-    otp_config = Application.get_env(otp_app, __CALLER__.module, [])
+    {otp_app, otp_config} =
+      case Keyword.fetch(opts, :otp_app) do
+        {:ok, app} -> {app, Application.get_env(app, __CALLER__.module, [])}
+        _ -> {:data_daemon, []}
+      end
+
     config = fn setting, default -> config(opts, otp_app, __CALLER__.module, setting, default) end
     namespace = if ns = config.(:namespace, nil), do: String.replace(ns, ~r/^(.*?)\.*$/, "\\1.")
     decorators = if config.(:decorators, true), do: __MODULE__.Decorators.enable()
