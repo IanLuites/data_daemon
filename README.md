@@ -50,7 +50,7 @@ by adding `data_daemon` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:data_daemon, "~> 0.0.1"}
+    {:data_daemon, "~> 0.3"}
   ]
 end
 ```
@@ -147,6 +147,17 @@ The following metrics are tracked:
  * `vm.garbage_collection.words`, number of words garbage.
 
 ## Changelog
+
+### 0.3.0 (2020-01-30)
+
+Changes:
+
+* New socket logic for Erlang OTP 22 and up.
+
+Bug fixes:
+
+* Hound spec. (Dialyzer)
+* DataDaemon spec. (Dialyzer)
 
 ### 0.2.4 (2020-01-29)
 
