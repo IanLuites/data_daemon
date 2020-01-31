@@ -51,7 +51,7 @@ defmodule DataDaemon do
   @typedoc ~S"""
   Supported metric types.
   """
-  @type type :: :counter | :gauge | :histogram | :set | :timing
+  @type type :: :counter | :gauge | :histogram | :set | :timing | String.t()
 
   @typedoc ~S"""
   Metric tag value.
