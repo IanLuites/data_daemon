@@ -9,7 +9,7 @@ defmodule DataDaemon.Hound do
   @delimiter_size 1
 
   @doc false
-  @spec child_spec(atom, opts :: Keyword.t()) :: Supervisor.child_spec()
+  @spec child_spec(atom, opts :: Keyword.t()) :: :supervisor.child_spec()
   def child_spec(pool, opts \\ []) do
     hound = opts[:hound] || []
 
@@ -21,15 +21,15 @@ defmodule DataDaemon.Hound do
         size: resolve_config(hound, :size, 1),
         max_overflow: resolve_config(hound, :overflow, 5)
       ],
-      {pool, opts}
+      [{pool, opts}]
     )
   end
 
   ## Client API
 
   @doc false
-  @spec start_link({module, opts :: Keyword.t()}) :: GenServer.on_start()
-  def start_link({daemon, opts}) do
+  @spec start_link([{module, opts :: Keyword.t()}]) :: GenServer.on_start()
+  def start_link([{daemon, opts}]) do
     GenServer.start_link(
       __MODULE__,
       %{
@@ -38,7 +38,7 @@ defmodule DataDaemon.Hound do
         daemon: daemon,
         resolver: Module.concat(daemon, "Resolver"),
         udp_wait: resolve_config(opts, :udp_wait, 5_000),
-        udp_size: resolve_config(opts, :udp_size, 1_472)
+        udp_size: resolve_config(opts, :udp_size, 1_472) - @header_size
       },
       []
     )
@@ -59,14 +59,11 @@ defmodule DataDaemon.Hound do
 
   @impl GenServer
   def init(state = %{resolver: resolver}) do
-    {ip, port} = Resolver.host(resolver)
-    header = build_header(ip, port)
-
     state =
       Map.merge(state, %{
-        buffer: header,
-        size: @header_size,
-        header: header,
+        buffer: [],
+        size: 0,
+        target: Resolver.host(resolver),
         timer: nil
       })
 
@@ -74,8 +71,8 @@ defmodule DataDaemon.Hound do
   end
 
   @impl GenServer
-  def handle_cast({:metric, data}, state = %{socket: nil}) do
-    {:noreply, send_or_buffer(data, %{state | socket: open()})}
+  def handle_cast({:metric, data}, state = %{target: target, socket: nil}) do
+    {:noreply, send_or_buffer(data, %{state | socket: open(target)})}
   end
 
   def handle_cast({:metric, data}, state) do
@@ -84,31 +81,22 @@ defmodule DataDaemon.Hound do
 
   @impl GenServer
   def handle_info({:refresh_header, ip, port}, state) do
-    {:noreply, %{state | header: build_header(ip, port)}}
+    {:noreply, %{state | socket: open({ip, port})}}
   end
 
-  def handle_info(:force_send, state = %{socket: socket, buffer: buffer, header: header}) do
+  def handle_info(:force_send, state = %{socket: socket, buffer: buffer}) do
     send_buffer(socket, buffer)
-    {:noreply, %{state | buffer: header, size: @header_size, timer: nil}}
+    {:noreply, %{state | buffer: [], size: 0, timer: nil}}
   end
 
   def handle_info({:inet_reply, _, :ok}, state), do: {:noreply, state}
 
   # Network issues, let's resolve and try to _reconnect_
-  def handle_info(
-        {:inet_reply, _, {:error, :einval}},
-        state = %{buffer: buffer, resolver: resolver, socket: socket}
-      ) do
-    if socket, do: :gen_udp.close(socket)
+  def handle_info({:inet_reply, _, {:error, :einval}}, state = %{resolver: r, socket: socket}) do
+    close(socket)
 
-    {ip, port} = Resolver.host(resolver)
-    header = build_header(ip, port)
-
-    if byte_size(buffer) <= @header_size do
-      {:noreply, %{state | buffer: header, header: header, socket: open()}}
-    else
-      {:noreply, %{state | header: header, socket: open()}}
-    end
+    target = Resolver.host(r)
+    {:noreply, %{state | target: target, socket: open(target)}}
   end
 
   def handle_info({:inet_reply, _, {:error, reason}}, state) do
@@ -118,16 +106,9 @@ defmodule DataDaemon.Hound do
 
   @impl GenServer
   def terminate(_reason, %{socket: socket}) do
-    if socket, do: :gen_udp.close(socket)
+    close(socket)
 
     :ok
-  end
-
-  @spec open :: :gen_udp.socket()
-  defp open do
-    {:ok, socket} = :gen_udp.open(0, active: false)
-
-    socket
   end
 
   @spec send_or_buffer(iodata, map) :: map
@@ -138,7 +119,6 @@ defmodule DataDaemon.Hound do
            socket: socket,
            buffer: buffer,
            size: size,
-           header: header,
            udp_size: udp_size,
            udp_wait: udp_wait
          }
@@ -147,8 +127,8 @@ defmodule DataDaemon.Hound do
     new_size = size + data_size
 
     cond do
-      size == @header_size ->
-        %{state | buffer: [buffer, data], size: new_size, timer: start_timer(timer, udp_wait)}
+      buffer == [] ->
+        %{state | buffer: data, size: new_size, timer: start_timer(timer, udp_wait)}
 
       new_size < udp_size ->
         %{
@@ -160,13 +140,13 @@ defmodule DataDaemon.Hound do
 
       new_size == udp_size ->
         send_buffer(socket, buffer)
-        %{state | buffer: header, size: @header_size, timer: clear_timer(timer)}
+        %{state | buffer: [], size: 0, timer: clear_timer(timer)}
 
       :send_and_create ->
         send_buffer(socket, buffer)
         new_timer = start_timer(clear_timer(timer), udp_wait)
 
-        %{state | buffer: [header, data], size: @header_size + data_size, timer: new_timer}
+        %{state | buffer: data, size: data_size, timer: new_timer}
     end
   end
 
@@ -182,19 +162,52 @@ defmodule DataDaemon.Hound do
   defp start_timer(nil, udp_wait), do: Process.send_after(self(), :force_send, udp_wait)
   defp start_timer(timer, _), do: timer
 
-  @spec send_buffer(:gen_udp.socket(), iodata) :: boolean
-  defp send_buffer(socket, buffer), do: Port.command(socket, buffer)
+  ### Socket Interactions ###
 
-  @spec build_header(tuple, integer) :: iodata
-  defp build_header({ip1, ip2, ip3, ip4}, port) do
-    [
-      1,
-      :erlang.band(:erlang.bsr(port, 8), 0xFF),
-      :erlang.band(port, 0xFF),
-      :erlang.band(ip1, 0xFF),
-      :erlang.band(ip2, 0xFF),
-      :erlang.band(ip3, 0xFF),
-      :erlang.band(ip4, 0xFF)
-    ]
+  version = :erlang.system_info(:version)
+  version = "#{version}#{String.duplicate(".0", 2 - Enum.count(version, &(&1 == ?.)))}"
+
+  if Version.match?(version, ">= 10.5.0") do
+    @spec open(tuple) :: :socket.socket()
+    defp open({ip, port}) do
+      {:ok, socket} = :socket.open(:inet, :dgram, :udp)
+      :ok = :socket.connect(socket, %{family: :inet, addr: ip, port: port})
+
+      socket
+    end
+
+    @spec send_buffer(:socket.socket(), iodata) :: boolean
+    defp send_buffer(socket, buffer), do: :socket.send(socket, buffer) == :ok
+
+    @spec close(:socket.socket() | nil) :: :ok
+    defp close(nil), do: :ok
+    defp close(socket), do: :socket.close(socket)
+  else
+    @spec open(tuple) :: tuple
+    defp open({ip, port}) do
+      {:ok, socket} = :gen_udp.open(0, active: false)
+
+      {socket, build_header(ip, port)}
+    end
+
+    @spec send_buffer(tuple, iodata) :: boolean
+    defp send_buffer({socket, header}, buffer), do: Port.command(socket, [header, buffer])
+
+    @spec build_header(tuple, integer) :: iodata
+    defp build_header({ip1, ip2, ip3, ip4}, port) do
+      [
+        1,
+        :erlang.band(:erlang.bsr(port, 8), 0xFF),
+        :erlang.band(port, 0xFF),
+        :erlang.band(ip1, 0xFF),
+        :erlang.band(ip2, 0xFF),
+        :erlang.band(ip3, 0xFF),
+        :erlang.band(ip4, 0xFF)
+      ]
+    end
+
+    @spec close(tuple | nil) :: :ok
+    defp close(nil), do: :ok
+    defp close({socket, _}), do: :gen_udp.close(socket)
   end
 end
