@@ -70,7 +70,7 @@ defmodule DataDaemon.Extensions.DataDog do
       Distribution tracks the statistical distribution of a set of values across your infrastructure.
       """
       @spec distribution(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
-      def distribution(key, value, opts \\ []), do: metric(key, value, :distribution, opts)
+      def distribution(key, value, opts \\ []), do: metric(key, value, "distribution", opts)
 
       import DataDaemon.Extensions.DataDog, only: [build_event: 2]
 
@@ -88,7 +88,7 @@ defmodule DataDaemon.Extensions.DataDog do
       | `:source_type_name` (optional) | Add a source type to the event. No default.                                               |
       | `:alert_type` (optional)       | Set to `:error`, `:warning`, `:info` or `:success`. Default `:info`.                      |
       """
-      @spec event(String.t(), String.t(), Keyword.t()) :: String.t()
+      @spec event(String.t(), String.t(), Keyword.t()) :: :ok | {:error, atom}
       def event(title, text, opts \\ []) do
         text = String.replace(text, "\n", "\\n")
 
