@@ -52,16 +52,23 @@ defmodule DataDaemon.Util do
   """
   @spec config(Keyword.t(), atom, atom, atom, any) :: any
   def config(opts, app, key, setting, default \\ nil) do
-    case Keyword.get_lazy(
-           opts,
-           setting,
-           fn ->
-             Keyword.get(Application.get_env(app, key, []), setting, default)
-           end
-         ) do
-      {:system, var} -> System.get_env(var)
-      val -> val
+    result =
+      case Keyword.get_lazy(
+             opts,
+             setting,
+             fn ->
+               Keyword.get(Application.get_env(app, key, []), setting, default)
+             end
+           ) do
+        {:system, var} -> System.get_env(var)
+        val -> val
+      end
+
+    quote do
+      unquote(result)
     end
+    |> Code.eval_quoted()
+    |> elem(0)
   end
 
   @doc ~S"""
