@@ -148,6 +148,17 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.3.1 (2020-01-31)
+
+Changes:
+
+* Custom metric type passing. (binary)
+* Extended module based config options.
+
+Bug fixes:
+
+* DataDog specs. (Dialyzer)
+
 ### 0.3.0 (2020-01-30)
 
 Changes:
