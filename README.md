@@ -148,6 +148,17 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.3.2 (2020-02-01)
+
+New:
+
+* Full documentation and specs for using module.
+* Doctest support for target module.
+
+Bug fixes:
+
+* DataDog distribution custom metric identifier.
+
 ### 0.3.1 (2020-01-31)
 
 Changes:
