@@ -114,6 +114,7 @@ defmodule DataDaemon do
 
     hound_config = Keyword.merge(opts[:hound] || [], otp_config[:hound] || [])
 
+    # credo:disable-for-next-line Credo.Check.Refactor.LongQuoteBlocks
     quote location: :keep do
       @opts unquote(opts |> Keyword.merge(otp_config) |> Keyword.put(:hound, hound_config))
 

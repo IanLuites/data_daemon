@@ -66,16 +66,31 @@ defmodule DataDaemon.Extensions.DataDog do
     tags = config(opts, opts[:otp_app], __CALLER__.module, :tags, [])
 
     quote location: :keep do
-      @doc ~S"""
+      @doc """
       Distribution tracks the statistical distribution of a set of values across your infrastructure.
+
+      The value for the given metric key needs to be an integer.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.distribution("connections", 123)
+      :ok
+
+      iex> #{inspect(__MODULE__)}.distribution("connections", 123, zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec distribution(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
-      def distribution(key, value, opts \\ []), do: metric(key, value, "distribution", opts)
+      def distribution(key, value, opts \\ []), do: metric(key, value, "d", opts)
 
       import DataDaemon.Extensions.DataDog, only: [build_event: 2]
 
-      @doc ~S"""
+      @doc """
       Create an event for the DataDog event stream.
+
+      The event consist of a string title and text,
+      the latter can be multi-line.
 
       ## Options
 
@@ -87,6 +102,16 @@ defmodule DataDaemon.Extensions.DataDog do
       | `:priority` (optional)         | Set to `:normal` or `:low`. Default `:normal`.                                            |
       | `:source_type_name` (optional) | Add a source type to the event. No default.                                               |
       | `:alert_type` (optional)       | Set to `:error`, `:warning`, `:info` or `:success`. Default `:info`.                      |
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.event("Event Title", "Event body.\\nMore details")
+      :ok
+
+      iex> #{inspect(__MODULE__)}.event("Event Title", "Event body.\\nMore details", zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec event(String.t(), String.t(), Keyword.t()) :: :ok | {:error, atom}
       def event(title, text, opts \\ []) do
