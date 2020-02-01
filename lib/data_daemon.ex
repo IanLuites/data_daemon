@@ -128,8 +128,16 @@ defmodule DataDaemon do
       @spec child_spec(opts :: Keyword.t()) :: map
       def child_spec(opts \\ []), do: DataDaemon.child_spec(__MODULE__, opts)
 
-      @doc ~S"""
+      @doc """
       Start the DataDaemon.
+
+      ## Example
+
+      ```elixir
+      iex>  {:error, {:already_started, pid}} = #{inspect(__MODULE__)}.start_link
+      iex> is_pid(pid)
+      true
+      ```
       """
       @spec start_link(opts :: Keyword.t()) :: Supervisor.on_start()
       def start_link(opts \\ []) do
@@ -162,14 +170,40 @@ defmodule DataDaemon do
 
       ### Methods ###
 
-      @doc ~S"""
-      Count tracks how many times something happened per second.
+      @doc """
+      Increment a COUNT metric by an arbitrary value.
+
+      The given metric key will commonly be treated as a rate.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.count("request.count_total", 2)
+      :ok
+
+      iex> #{inspect(__MODULE__)}.count("request.count_total", 2, zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec count(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
       def count(key, value, opts \\ []), do: metric(key, value, :counter, opts)
 
-      @doc ~S"""
-      Increment is an alias of count with a default of 1.
+      @doc """
+      Increment a COUNT metric.
+
+      The given metric key will commonly be treated as a rate.
+      It is possible to pass a custom increment value,
+      which makes it an alias for count.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.increment("request.count_total")
+      :ok
+
+      iex> #{inspect(__MODULE__)}.increment("request.count_total", zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec increment(DataDaemon.key(), integer | Keyword.t(), Keyword.t()) ::
               :ok | {:error, atom}
@@ -180,41 +214,121 @@ defmodule DataDaemon do
 
       def increment(key, opts, []) when is_list(opts), do: metric(key, 1, :counter, opts)
 
-      @doc ~S"""
-      Decrement is just count of -x. (Default: 1)
+      @doc """
+      Decrement a COUNT metric.
+
+      The given metric key will commonly be treated as a rate.
+      It is possible to pass a custom decrement value,
+      which makes it an alias for count with a negative value.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.decrement("request.count_total")
+      :ok
+
+      iex> #{inspect(__MODULE__)}.decrement("request.count_total", zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec decrement(DataDaemon.key(), integer | Keyword.t(), Keyword.t()) ::
               :ok | {:error, atom}
+      def decrement(key, value \\ -1, opts \\ [])
+
       def decrement(key, value, opts) when is_number(value),
         do: metric(key, -value, :counter, opts)
 
       def decrement(key, opts, []) when is_list(opts), do: metric(key, -1, :counter, opts)
 
-      @doc ~S"""
-      Gauge measures the value of a metric at a particular time.
+      @doc """
+      Gauge measures the value of a metric key at a particular time.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.gauge("request.queue_depth", 12)
+      :ok
+
+      iex> #{inspect(__MODULE__)}.gauge("request.queue_depth", 12, zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec gauge(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
       def gauge(key, value, opts \\ []), do: metric(key, value, :gauge, opts)
 
-      @doc ~S"""
+      @doc """
       Histogram tracks the statistical distribution of a set of values on each host.
+
+      The value for the given metric keys needs to be an integer, but can be negative.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.histogram("request.file_size", 1034)
+      :ok
+
+      iex> #{inspect(__MODULE__)}.histogram("request.file_size", 1034, zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec histogram(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
       def histogram(key, value, opts \\ []), do: metric(key, value, :histogram, opts)
 
-      @doc ~S"""
+      @doc """
       Set counts the number of unique elements in a group.
+
+      The value for the given metric key can be any string.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.set("unique.users", "bob")
+      :ok
+
+      iex> #{inspect(__MODULE__)}.set("unique.users", "bob", zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec set(DataDaemon.key(), String.t(), Keyword.t()) :: :ok | {:error, atom}
       def set(key, value, opts \\ []), do: metric(key, value, :set, opts)
 
-      @doc ~S"""
-      Timing sends timing information.
+      @doc """
+      Measure timing data.
+
+      The value for the given metric key needs to represent a positive amount
+      of time spend.
+
+      ## Example
+
+      ```elixir
+      iex> #{inspect(__MODULE__)}.timing("request.duration", 34)
+      :ok
+
+      iex> #{inspect(__MODULE__)}.timing("request.duration", 34, zone: "us-east-1a")
+      :ok
+      ```
       """
-      @spec timing(DataDaemon.key(), integer, Keyword.t()) :: :ok | {:error, atom}
+      @spec timing(DataDaemon.key(), pos_integer, Keyword.t()) :: :ok | {:error, atom}
       def timing(key, value, opts \\ []), do: metric(key, value, :timing, opts)
 
-      @doc ~S"""
+      @doc """
+      Record any custom metric.
+
+      The value for the given metric key can be any string or integer,
+      while the custom type can be represented by a string.
+
+      The standard options apply.
+
+      ## Example
+
+      Custom [d]istrubtion type:
+      ```elixir
+      iex> #{inspect(__MODULE__)}.metric("connections", 123, "d")
+      :ok
+
+      iex> #{inspect(__MODULE__)}.metric("connections", 123, "d", zone: "us-east-1a")
+      :ok
+      ```
       """
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
