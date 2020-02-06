@@ -80,8 +80,15 @@ defmodule DataDaemon.Hound do
   end
 
   @impl GenServer
-  def handle_info({:refresh_header, ip, port}, state) do
-    {:noreply, %{state | socket: open({ip, port})}}
+  def handle_info({:refresh_header, ip, port}, state = %{target: target, socket: socket}) do
+    new = {ip, port}
+
+    if target == new do
+      {:noreply, state}
+    else
+      close(socket)
+      {:noreply, %{state | target: new, socket: open(new)}}
+    end
   end
 
   def handle_info(:force_send, state = %{socket: socket, buffer: buffer}) do
