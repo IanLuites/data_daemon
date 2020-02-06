@@ -148,6 +148,12 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.3.3 (2020-02-06)
+
+Bug fixes:
+
+* UDP socket leak on DNS refresh.
+
 ### 0.3.2 (2020-02-01)
 
 New:
