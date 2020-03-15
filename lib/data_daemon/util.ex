@@ -50,25 +50,25 @@ defmodule DataDaemon.Util do
   @doc ~S"""
   Fetch a setting from either the passed options or the application config.
   """
-  @spec config(Keyword.t(), atom, atom, atom, any) :: any
+  @spec config(Keyword.t(), atom, atom, atom, term) :: integer | String.t() | term
   def config(opts, app, key, setting, default \\ nil) do
-    result =
-      case Keyword.get_lazy(
-             opts,
-             setting,
-             fn ->
-               Keyword.get(Application.get_env(app, key, []), setting, default)
-             end
-           ) do
-        {:system, var} -> System.get_env(var)
-        val -> val
-      end
+    case Keyword.get_lazy(
+           opts,
+           setting,
+           fn ->
+             Keyword.get(Application.get_env(app, key, []), setting, default)
+           end
+         ) do
+      {:system, var} ->
+        System.get_env(var)
 
-    quote do
-      unquote(result)
+      val ->
+        quote do
+          unquote(val)
+        end
+        |> Code.eval_quoted()
+        |> elem(0)
     end
-    |> Code.eval_quoted()
-    |> elem(0)
   end
 
   @doc ~S"""
