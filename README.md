@@ -148,6 +148,10 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.3.4 (2020-03-15)
+
+Elixir 1.10 support. (Purely spec updates.)
+
 ### 0.3.3 (2020-02-06)
 
 Bug fixes:
