@@ -50,7 +50,7 @@ by adding `data_daemon` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:data_daemon, "~> 0.3"}
+    {:data_daemon, "~> 0.4"}
   ]
 end
 ```
@@ -147,6 +147,10 @@ The following metrics are tracked:
  * `vm.garbage_collection.words`, number of words garbage.
 
 ## Changelog
+
+### 0.4.0 (2020-08-11)
+
+Improved metrics throughput by sharing named sockets/ports.
 
 ### 0.3.4 (2020-03-15)
 
