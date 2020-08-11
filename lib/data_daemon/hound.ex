@@ -94,7 +94,7 @@ defmodule DataDaemon.Hound do
     Enum.reduce(1..size, {:ok, []}, fn
       mod, {:ok, mods} ->
         m = Module.concat(module, "S#{mod}")
-        with {:ok, _} = get_socket(m), do: {:ok, [m | mods]}
+        with {:ok, _} <- get_socket(m), do: {:ok, [m | mods]}
 
       _, err ->
         err
@@ -108,7 +108,6 @@ defmodule DataDaemon.Hound do
     else
       with res = {:ok, socket} <- :gen_udp.open(0, active: false) do
         Process.register(socket, module)
-        IO.inspect(socket, label: inspect(module))
         res
       end
     end
