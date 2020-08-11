@@ -2,6 +2,7 @@ defmodule DataDaemon.Resolver do
   @moduledoc false
   use GenServer
   require Logger
+  alias DataDaemon.Hound
   import DataDaemon.Util
 
   @doc false
@@ -30,7 +31,7 @@ defmodule DataDaemon.Resolver do
     {host, port} =
       if url = config(opts, otp, daemon, :url) do
         uri = URI.parse(url)
-        {String.to_charlist(uri.host), uri.port}
+        {String.to_charlist(uri.host), uri.port || 8_125}
       else
         {String.to_charlist(config(opts, otp, daemon, :host, "localhost")),
          to_integer!(config(opts, otp, daemon, :port, 8_125))}
@@ -54,6 +55,8 @@ defmodule DataDaemon.Resolver do
     case resolve(host, minimum_ttl) do
       {ip, ttl} ->
         refresh_callback(refresh, ttl)
+
+        recompile(daemon, ip, port)
 
         {:ok,
          %{
@@ -97,7 +100,7 @@ defmodule DataDaemon.Resolver do
           refresh: refresh
         }
       ) do
-    if ip == ip_old, do: notify_hounds(daemon, ip, port)
+    if ip == ip_old, do: recompile(daemon, ip, port)
 
     refresh_callback(refresh, ttl)
     {:noreply, %{state | ip: ip, ttl: ttl}}
@@ -117,14 +120,9 @@ defmodule DataDaemon.Resolver do
     end)
   end
 
-  @spec notify_hounds(module, tuple, non_neg_integer) :: :ok
-  defp notify_hounds(daemon, ip, port) do
-    spawn(fn ->
-      Enum.each(
-        :gen_server.call(daemon, :get_all_workers),
-        fn {_, pid, _, _} -> send(pid, {:refresh_header, ip, port}) end
-      )
-    end)
+  @spec recompile(module, tuple, non_neg_integer) :: :ok
+  defp recompile(daemon, ip, port) do
+    Hound.open(Module.concat(daemon, Sender), ip, port)
 
     :ok
   end

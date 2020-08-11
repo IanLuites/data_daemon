@@ -348,7 +348,7 @@ defmodule DataDaemon do
           )
 
       defp send_metric(key, value, type, opts),
-        do: DataDaemonDriver.metric(__MODULE__, key, value, type, opts)
+        do: DataDaemonDriver.metric(__MODULE__.Sender, key, value, type, opts)
     end
   end
 
@@ -363,16 +363,12 @@ defmodule DataDaemon do
     }
   end
 
-  alias DataDaemon.{Hound, Resolver}
+  alias DataDaemon.Resolver
 
   @doc false
   @spec start_link(module, Keyword.t()) :: Supervisor.on_start()
   def start_link(module, opts \\ []) do
-    children = [
-      Resolver.child_spec(module, opts),
-      Hound.child_spec(module, opts)
-      | Keyword.get(opts, :children, [])
-    ]
+    children = [Resolver.child_spec(module, opts) | Keyword.get(opts, :children, [])]
 
     opts = [strategy: :one_for_one, name: Module.concat(module, Supervisor)]
     Supervisor.start_link(children, opts)
@@ -382,10 +378,6 @@ defmodule DataDaemon do
   @spec metric(module, DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
           :ok | {:error, atom}
   def metric(reporter, key, value, type, opts \\ []) do
-    :poolboy.transaction(
-      reporter,
-      &GenServer.cast(&1, {:metric, package(key, value, type, opts)}),
-      5000
-    )
+    reporter.send(package(key, value, type, opts))
   end
 end

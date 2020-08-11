@@ -1,220 +1,167 @@
 defmodule DataDaemon.Hound do
   @moduledoc false
-  use GenServer
-  require Logger
-  alias DataDaemon.Resolver
-
-  @header_size 7
-  @delimiter "\n"
-  @delimiter_size 1
 
   @doc false
-  @spec child_spec(atom, opts :: Keyword.t()) :: :supervisor.child_spec()
-  def child_spec(pool, opts \\ []) do
-    hound = opts[:hound] || []
+  @spec open(
+          module :: module,
+          host :: binary | charlist | {byte, byte, byte, byte},
+          port :: binary | integer
+        ) :: :ok | {:error, atom}
+  def open(module, host, port) do
+    true = Code.ensure_loaded?(:gen_udp)
 
-    :poolboy.child_spec(
-      pool,
-      [
-        name: {:local, pool},
-        worker_module: __MODULE__,
-        size: resolve_config(hound, :size, 1),
-        max_overflow: resolve_config(hound, :overflow, 5)
-      ],
-      [{pool, opts}]
-    )
-  end
+    h = if(is_binary(host), do: String.to_charlist(host), else: host)
+    p = if(is_binary(port), do: String.to_integer(port), else: port)
+    pool_size = String.to_integer(System.get_env("DATADAEMON_POOL_SIZE", "1"))
 
-  ## Client API
+    with {:ok, sockets} <- get_sockets(module, pool_size) do
+      Code.compiler_options(ignore_module_conflict: true)
 
-  @doc false
-  @spec start_link([{module, opts :: Keyword.t()}]) :: GenServer.on_start()
-  def start_link([{daemon, opts}]) do
-    GenServer.start_link(
-      __MODULE__,
-      %{
-        socket: nil,
-        opts: opts,
-        daemon: daemon,
-        resolver: Module.concat(daemon, "Resolver"),
-        udp_wait: resolve_config(opts, :udp_wait, 5_000),
-        udp_size: resolve_config(opts, :udp_size, 1_472) - @header_size
-      },
-      []
-    )
-  end
+      if match?([_], sockets) do
+        Code.compile_quoted(
+          quote do
+            defmodule unquote(module) do
+              @moduledoc false
 
-  @spec resolve_config(Keyword.t(), atom, integer | atom) :: integer | no_return
-  defp resolve_config(opts, option, default) do
-    case opts[option] || default do
-      nil -> default
-      value when is_integer(value) -> value
-      value when is_binary(value) -> String.to_integer(value)
-      value when is_atom(value) -> value
-      {:system, value} -> String.to_integer(System.get_env(value) || to_string(default))
+              @doc false
+              @spec send(data :: iolist) :: :ok | {:error, atom}
+              def send(metric) do
+                Port.command(unquote(List.first(sockets)), [unquote(build_header(h, p)), metric])
+
+                receive do
+                  {:inet_reply, _, res} -> res
+                after
+                  5_000 -> {:error, :timeout}
+                end
+              end
+            end
+          end
+        )
+      else
+        mods =
+          sockets
+          |> Enum.with_index()
+          |> Enum.reduce(
+            quote do
+              @spec get_port(integer) :: module
+              defp get_port(pool)
+            end,
+            fn {mod, index}, acc ->
+              quote do
+                unquote(acc)
+                defp get_port(unquote(index)), do: unquote(mod)
+              end
+            end
+          )
+
+        Code.compile_quoted(
+          quote do
+            defmodule unquote(module) do
+              @moduledoc false
+
+              @doc false
+              @spec send(data :: iolist) :: :ok | {:error, atom}
+              def send(metric) do
+                [:positive]
+                |> :erlang.unique_integer()
+                |> rem(unquote(Enum.count(sockets)))
+                |> get_port()
+                |> Port.command([unquote(build_header(h, p)), metric])
+
+                receive do
+                  {:inet_reply, _, res} -> res
+                after
+                  5_000 -> {:error, :timeout}
+                end
+              end
+
+              unquote(mods)
+            end
+          end
+        )
+      end
+
+      Code.compiler_options(ignore_module_conflict: false)
+
+      :ok
     end
   end
 
-  ## Server API
+  @spec get_sockets(module, pos_integer()) :: {:ok, [module]} | {:error, atom}
+  defp get_sockets(module, size) do
+    close_overflow_sockets(module, size + 1)
 
-  @impl GenServer
-  def init(state = %{resolver: resolver}) do
-    state =
-      Map.merge(state, %{
-        buffer: [],
-        size: 0,
-        target: Resolver.host(resolver),
-        timer: nil
-      })
+    Enum.reduce(1..size, {:ok, []}, fn
+      mod, {:ok, mods} ->
+        m = Module.concat(module, "S#{mod}")
+        with {:ok, _} <- get_socket(m), do: {:ok, [m | mods]}
 
-    {:ok, state}
+      _, err ->
+        err
+    end)
   end
 
-  @impl GenServer
-  def handle_cast({:metric, data}, state = %{target: target, socket: nil}) do
-    {:noreply, send_or_buffer(data, %{state | socket: open(target)})}
-  end
-
-  def handle_cast({:metric, data}, state) do
-    {:noreply, send_or_buffer(data, state)}
-  end
-
-  @impl GenServer
-  def handle_info({:refresh_header, ip, port}, state = %{target: target, socket: socket}) do
-    new = {ip, port}
-
-    if target == new do
-      {:noreply, state}
+  @spec get_socket(module) :: {:ok, port()} | {:error, atom}
+  defp get_socket(module) do
+    if s = Process.whereis(module) do
+      {:ok, s}
     else
-      close(socket)
-      {:noreply, %{state | target: new, socket: open(new)}}
+      with res = {:ok, socket} <- :gen_udp.open(0, active: false) do
+        Process.register(socket, module)
+        res
+      end
     end
   end
 
-  def handle_info(:force_send, state = %{socket: socket, buffer: buffer}) do
-    send_buffer(socket, buffer)
-    {:noreply, %{state | buffer: [], size: 0, timer: nil}}
-  end
-
-  def handle_info({:inet_reply, _, :ok}, state), do: {:noreply, state}
-
-  # Network issues, let's resolve and try to _reconnect_
-  def handle_info({:inet_reply, _, {:error, :einval}}, state = %{resolver: r, socket: socket}) do
-    close(socket)
-
-    target = Resolver.host(r)
-    {:noreply, %{state | target: target, socket: open(target)}}
-  end
-
-  def handle_info({:inet_reply, _, {:error, reason}}, state) do
-    Logger.error(fn -> ": Reporter Error: #{reason}" end)
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def terminate(_reason, %{socket: socket}) do
-    close(socket)
-
-    :ok
-  end
-
-  @spec send_or_buffer(iodata, map) :: map
-  defp send_or_buffer(
-         data,
-         state = %{
-           timer: timer,
-           socket: socket,
-           buffer: buffer,
-           size: size,
-           udp_size: udp_size,
-           udp_wait: udp_wait
-         }
-       ) do
-    data_size = :erlang.iolist_size(data) + @delimiter_size
-    new_size = size + data_size
-
-    cond do
-      buffer == [] ->
-        %{state | buffer: data, size: new_size, timer: start_timer(timer, udp_wait)}
-
-      new_size < udp_size ->
-        %{
-          state
-          | buffer: [buffer, @delimiter, data],
-            size: new_size,
-            timer: start_timer(timer, udp_wait)
-        }
-
-      new_size == udp_size ->
-        send_buffer(socket, buffer)
-        %{state | buffer: [], size: 0, timer: clear_timer(timer)}
-
-      :send_and_create ->
-        send_buffer(socket, buffer)
-        new_timer = start_timer(clear_timer(timer), udp_wait)
-
-        %{state | buffer: data, size: data_size, timer: new_timer}
+  @spec close_overflow_sockets(module, pos_integer) :: :ok
+  defp close_overflow_sockets(module, mod) do
+    if close_socket(Module.concat(module, "S#{mod}")) do
+      close_overflow_sockets(module, mod + 1)
+    else
+      :ok
     end
   end
 
-  @spec clear_timer(any) :: nil
-  defp clear_timer(nil), do: nil
+  @spec close_socket(module) :: boolean
+  defp close_socket(module) do
+    if Process.whereis(module) do
+      Process.unregister(module)
 
-  defp clear_timer(timer) do
-    Process.cancel_timer(timer)
-    nil
+      true
+    else
+      false
+    end
   end
 
-  @spec start_timer(any, pos_integer) :: any
-  defp start_timer(nil, udp_wait), do: Process.send_after(self(), :force_send, udp_wait)
-  defp start_timer(timer, _), do: timer
+  ### UDP Building ###
 
-  ### Socket Interactions ###
+  otp_release = :erlang.system_info(:otp_release)
+  @addr_family if(otp_release >= '19', do: [1], else: [])
 
-  version = :erlang.system_info(:version)
-  version = "#{version}#{String.duplicate(".0", 2 - Enum.count(version, &(&1 == ?.)))}"
+  defp build_header(host, port) do
+    {ip1, ip2, ip3, ip4} =
+      if is_tuple(host) do
+        host
+      else
+        {:ok, ip} = :inet.getaddr(host, :inet)
+        ip
+      end
 
-  if Version.match?(version, ">= 10.5.0") do
-    @spec open(tuple) :: :socket.socket()
-    defp open({ip, port}) do
-      {:ok, socket} = :socket.open(:inet, :dgram, :udp)
-      :ok = :socket.connect(socket, %{family: :inet, addr: ip, port: port})
+    anc_data_part =
+      if function_exported?(:gen_udp, :send, 5) do
+        [0, 0, 0, 0]
+      else
+        []
+      end
 
-      socket
-    end
-
-    @spec send_buffer(:socket.socket(), iodata) :: boolean
-    defp send_buffer(socket, buffer), do: :socket.send(socket, buffer) == :ok
-
-    @spec close(:socket.socket() | nil) :: :ok
-    defp close(nil), do: :ok
-    defp close(socket), do: :socket.close(socket)
-  else
-    @spec open(tuple) :: tuple
-    defp open({ip, port}) do
-      {:ok, socket} = :gen_udp.open(0, active: false)
-
-      {socket, build_header(ip, port)}
-    end
-
-    @spec send_buffer(tuple, iodata) :: boolean
-    defp send_buffer({socket, header}, buffer), do: Port.command(socket, [header, buffer])
-
-    @spec build_header(tuple, integer) :: iodata
-    defp build_header({ip1, ip2, ip3, ip4}, port) do
+    @addr_family ++
       [
-        1,
         :erlang.band(:erlang.bsr(port, 8), 0xFF),
         :erlang.band(port, 0xFF),
         :erlang.band(ip1, 0xFF),
         :erlang.band(ip2, 0xFF),
         :erlang.band(ip3, 0xFF),
         :erlang.band(ip4, 0xFF)
-      ]
-    end
-
-    @spec close(tuple | nil) :: :ok
-    defp close(nil), do: :ok
-    defp close({socket, _}), do: :gen_udp.close(socket)
+      ] ++ anc_data_part
   end
 end
