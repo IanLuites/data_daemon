@@ -8,7 +8,7 @@ defmodule DataDaemon.TestDaemon do
     children = [
       %{
         id: State,
-        start: {Agent, :start_link, [fn -> [] end, [name: module]]}
+        start: {Agent, :start_link, [fn -> [] end, [name: Module.concat(module, Sender)]]}
       }
       | Keyword.get(opts, :children, [])
     ]
@@ -25,11 +25,11 @@ defmodule DataDaemon.TestDaemon do
 
   @doc false
   @spec reported(module) :: String.t() | nil
-  def reported(reporter), do: Agent.get(reporter, &List.last/1)
+  def reported(reporter), do: Agent.get(Module.concat(reporter, Sender), &List.last/1)
 
   @doc false
   @spec all_reported(module) :: [String.t()]
-  def all_reported(reporter), do: Agent.get(reporter, &Enum.reverse/1)
+  def all_reported(reporter), do: Agent.get(Module.concat(reporter, Sender), &Enum.reverse/1)
 
   @doc false
   @spec assert_reported(module, fun, integer) :: boolean
