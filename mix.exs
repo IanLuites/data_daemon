@@ -60,7 +60,6 @@ defmodule DataDaemon.MixProject do
 
   defp deps do
     [
-      {:poolboy, "~> 1.5"},
       {:plug, ">= 0.0.0", optional: true},
       {:meck, "~> 0.8.12", optional: true, runtime: false, only: [:test]},
       {:analyze, "~> 0.1.10", optional: true, runtime: false, only: [:dev, :test]},
