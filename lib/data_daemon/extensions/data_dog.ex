@@ -161,7 +161,7 @@ defmodule DataDaemon.Extensions.DataDog do
       unless Logger.compare_levels(min_level, level) == :gt do
         level = translate_level(level)
         {{year, month, day}, {hour, minute, second, _millisecond}} = timestamp
-        message = if is_list(message), do: :erlang.iolist_to_binary(message), else: message
+        message = if is_list(message), do: to_string(message), else: message
 
         ts =
           :calendar.datetime_to_gregorian_seconds({{year, month, day}, {hour, minute, second}}) -

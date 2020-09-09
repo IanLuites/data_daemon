@@ -65,6 +65,14 @@ defmodule DataDaemon.Extensions.DataDogErrorHandlerTest do
         assert event =~ ~r/\|t:info/
       end)
     end
+
+    test "handles weird characters in the io list" do
+      Logger.info([8880])
+
+      TestDaemon.assert_reported(Example, fn event ->
+        assert event =~ ~r/⊰/
+      end)
+    end
   end
 
   describe "general handler" do
