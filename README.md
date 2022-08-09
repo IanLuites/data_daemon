@@ -64,10 +64,10 @@ be found at [https://hexdocs.pm/data_daemon](https://hexdocs.pm/data_daemon).
 
 A DataDog extension is available offering the following functionality:
 
- * `distribution/3` metric.
- * `event/3` event sending over UDP.
- * `error_handler` is available as option and
-    can be used to send errors as events.
+- `distribution/3` metric.
+- `event/3` event sending over UDP.
+- `error_handler` is available as option and
+  can be used to send errors as events.
 
 #### Events
 
@@ -77,7 +77,7 @@ to `event/3`.
 The following options are also supported:
 
 | **Option**                     | **Description**                                                                           |
-|--------------------------------|-------------------------------------------------------------------------------------------|
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
 | `:timestamp` (optional)        | Add a timestamp to the event. Default is the current timestamp.                           |
 | `:hostname` (optional)         | Add a hostname to the event. No default.                                                  |
 | `:aggregation_key` (optional)  | Add an aggregation key to group the event with others that have the same key. No default. |
@@ -119,34 +119,40 @@ Example: `config :my_app, MyDaemon, erlang_vm: [rate: 1_000]` for updates every 
 
 The following metrics are tracked:
 
- * `vm.process.count`, the current process count.
- * `vm.process.limit`, the current process limit.
- * `vm.process.queue`, the current amount of processes queued for running.
- * `vm.port.count`, the current port count.
- * `vm.port.limit`, the current port limit.
- * `vm.atom.count`, the current atom count.
- * `vm.atom.limit`, the current atom limit.
- * `vm.error.queue`, the amount of process messages queued for the error logger.
- * `vm.uptime`, erlang uptime.
- * `vm.refresh`, the amount of time (ms) since last stat check.
- * `vm.reductions`, amount of reductions.
- * `vm.message.queue`, total queued messages over all processes.
- * `vm.modules`, current amount of loaded modules.
- * `vm.memory.total`, total memory use in Kb.
- * `vm.memory.processes`, total process memory chunk use in Kb.
- * `vm.memory.processes_used`, total process memory use in Kb.
- * `vm.memory.system`, total system memory use in Kb.
- * `vm.memory.atom`, total atom memory chunk use in Kb.
- * `vm.memory.atom_used`, total atom memory use in Kb.
- * `vm.memory.binary`, total binary memory use in Kb.
- * `vm.memory.code`, total code memory use in Kb.
- * `vm.memory.ets`, total ets memory use in Kb.
- * `vm.io.in`, total IO input in Kb.
- * `vm.io.out`, total IO output in Kb.
- * `vm.garbage_collection.count`, number of garbage collections.
- * `vm.garbage_collection.words`, number of words garbage.
+- `vm.process.count`, the current process count.
+- `vm.process.limit`, the current process limit.
+- `vm.process.queue`, the current amount of processes queued for running.
+- `vm.port.count`, the current port count.
+- `vm.port.limit`, the current port limit.
+- `vm.atom.count`, the current atom count.
+- `vm.atom.limit`, the current atom limit.
+- `vm.error.queue`, the amount of process messages queued for the error logger.
+- `vm.uptime`, erlang uptime.
+- `vm.refresh`, the amount of time (ms) since last stat check.
+- `vm.reductions`, amount of reductions.
+- `vm.message.queue`, total queued messages over all processes.
+- `vm.modules`, current amount of loaded modules.
+- `vm.memory.total`, total memory use in Kb.
+- `vm.memory.processes`, total process memory chunk use in Kb.
+- `vm.memory.processes_used`, total process memory use in Kb.
+- `vm.memory.system`, total system memory use in Kb.
+- `vm.memory.atom`, total atom memory chunk use in Kb.
+- `vm.memory.atom_used`, total atom memory use in Kb.
+- `vm.memory.binary`, total binary memory use in Kb.
+- `vm.memory.code`, total code memory use in Kb.
+- `vm.memory.ets`, total ets memory use in Kb.
+- `vm.io.in`, total IO input in Kb.
+- `vm.io.out`, total IO output in Kb.
+- `vm.garbage_collection.count`, number of garbage collections.
+- `vm.garbage_collection.words`, number of words garbage.
 
 ## Changelog
+
+### 0.4.1 (2022-08-09)
+
+Fix resolving url with IP as host.
+Reduce dependency on Plug.
+Namespace logging.
 
 ### 0.4.0 (2020-08-11)
 
@@ -160,146 +166,146 @@ Elixir 1.10 support. (Purely spec updates.)
 
 Bug fixes:
 
-* UDP socket leak on DNS refresh.
+- UDP socket leak on DNS refresh.
 
 ### 0.3.2 (2020-02-01)
 
 New:
 
-* Full documentation and specs for using module.
-* Doctest support for target module.
+- Full documentation and specs for using module.
+- Doctest support for target module.
 
 Bug fixes:
 
-* DataDog distribution custom metric identifier.
+- DataDog distribution custom metric identifier.
 
 ### 0.3.1 (2020-01-31)
 
 Changes:
 
-* Custom metric type passing. (binary)
-* Extended module based config options.
+- Custom metric type passing. (binary)
+- Extended module based config options.
 
 Bug fixes:
 
-* DataDog specs. (Dialyzer)
+- DataDog specs. (Dialyzer)
 
 ### 0.3.0 (2020-01-30)
 
 Changes:
 
-* New socket logic for Erlang OTP 22 and up.
+- New socket logic for Erlang OTP 22 and up.
 
 Bug fixes:
 
-* Hound spec. (Dialyzer)
-* DataDaemon spec. (Dialyzer)
+- Hound spec. (Dialyzer)
+- DataDaemon spec. (Dialyzer)
 
 ### 0.2.4 (2020-01-29)
 
 Bug fixes:
 
-* Make hound resolve and open a new socket on some errors.
+- Make hound resolve and open a new socket on some errors.
 
 ### 0.2.3 (2019-04-30)
 
 Bug fixes:
 
-* Make hound update async to prevent pool-resolver deadlock.
+- Make hound update async to prevent pool-resolver deadlock.
 
 ### 0.2.2 (2019-04-29)
 
 New features:
 
-* `vm.refresh` erlang vm metric that tracks time (ms) since last stat check.
+- `vm.refresh` erlang vm metric that tracks time (ms) since last stat check.
 
 Bug fixes:
 
-* Fixes issue where the `vm.uptime` metric wouldn't actually track uptime, but time since last vm check.
+- Fixes issue where the `vm.uptime` metric wouldn't actually track uptime, but time since last vm check.
 
 ### 0.2.1 (2019-04-27)
 
 New features:
 
-* `:minimum_ttl` option to set a minimum TTL to prevent excessive refreshing. (Default: `1_000`)
+- `:minimum_ttl` option to set a minimum TTL to prevent excessive refreshing. (Default: `1_000`)
 
 Optimizations:
 
-* `:erlang_vm` extension runs as additional child to restart during crashes.
-* Perform actual resolve in async process to prevent deadlock during excessive DNS refresh.
-* DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
+- `:erlang_vm` extension runs as additional child to restart during crashes.
+- Perform actual resolve in async process to prevent deadlock during excessive DNS refresh.
+- DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
 
 Bug fixes:
 
-* Fixes issue where the `:erlang_vm` would link its process not to the DataDaemon, but the calling process.
+- Fixes issue where the `:erlang_vm` would link its process not to the DataDaemon, but the calling process.
 
 ### 0.2.0 (2019-04-17)
 
 New features:
 
-* `:erlang_vm` extension. Logs Erlang VM stats/metrics every minute. (Can be configured)
+- `:erlang_vm` extension. Logs Erlang VM stats/metrics every minute. (Can be configured)
 
 Optimizations:
 
-* Make config more dynamic.
-* DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
+- Make config more dynamic.
+- DNS resolves in separate process removing use of `:timer` and only sending an update to workers if `IP` changes.
 
 ### 0.1.4 (2019-03-25)
 
 New features:
 
-* Allow config overwrite by passing keyword settings to the child spec or start link.
+- Allow config overwrite by passing keyword settings to the child spec or start link.
 
 Optimizations:
 
-* Keep using old IP in case DNS refresh fails.
-* Added extra logging around DNS failures.
+- Keep using old IP in case DNS refresh fails.
+- Added extra logging around DNS failures.
 
 ### 0.1.3 (2018-11-03)
 
 New features:
 
-* The `:hound` setting now allows you to set the pool settings.
+- The `:hound` setting now allows you to set the pool settings.
 
 Optimizations:
 
-* DNS lookup only updates header on change.
+- DNS lookup only updates header on change.
 
 Fixes:
 
-* Functions with default arguments are now properly overwritten.
+- Functions with default arguments are now properly overwritten.
 
 ### 0.1.2 (2018-10-09)
 
 New features:
 
-* Test mode now supported as configuration.
-* The `:error_handler` setting now allows you to set a minimum level.
+- Test mode now supported as configuration.
+- The `:error_handler` setting now allows you to set a minimum level.
   (Default: `:info`, possible: `:debug`, `:info`, `:warn`, and `:error`)
-* Add `:dsn_refresh` config for refreshing the host name.
+- Add `:dsn_refresh` config for refreshing the host name.
   (Default: `:ttl`, possible: `:ttl` and `<integer>`. (seconds))
 
 Optimizations:
 
-* DNS lookup only updates header on change.
+- DNS lookup only updates header on change.
 
 Fixes:
 
-* Functions with default arguments are now properly overwritten.
+- Functions with default arguments are now properly overwritten.
 
 ### 0.1.0 (2018-10-07)
 
 New features:
 
-* Extension system to allow for different `StatsD` extensions.
-* Add new tag and value formats:
-  * `iodata` now supported for tags and values.
-  * `{:config, app, key}` now supported for tags.
-* DataDog Events are now supported with `event/3`.
-* DataDog can now be used as error handler by setting `error_handler: true`
+- Extension system to allow for different `StatsD` extensions.
+- Add new tag and value formats:
+  - `iodata` now supported for tags and values.
+  - `{:config, app, key}` now supported for tags.
+- DataDog Events are now supported with `event/3`.
+- DataDog can now be used as error handler by setting `error_handler: true`
   in module.
 
 Optimizations:
 
-* Plug reported optimized for detached user response and
+- Plug reported optimized for detached user response and
   compile time optimizations.

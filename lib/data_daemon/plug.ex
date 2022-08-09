@@ -11,8 +11,7 @@ defmodule DataDaemon.Plug do
   def enable do
     quote location: :keep do
       @behaviour Plug
-      import DataDaemon.Plug, only: [safe_in: 2]
-      import Plug.Conn, only: [register_before_send: 2]
+      alias Plug.Conn
 
       @doc false
       @spec init(Keyword.t()) ::
@@ -72,13 +71,13 @@ defmodule DataDaemon.Plug do
         else
           start_time = :erlang.monotonic_time(:milli_seconds)
 
-          register_before_send(conn, fn conn ->
+          Conn.register_before_send(conn, fn conn ->
             time = :erlang.monotonic_time(:milli_seconds) - start_time
 
             conn_tags =
               Enum.map(conn_tags, fn
-                {:conn, conn_tag} -> safe_in(conn, conn_tag)
-                {k, {:conn, conn_tag}} -> {k, safe_in(conn, conn_tag)}
+                {:conn, conn_tag} -> unquote(__MODULE__).safe_in(conn, conn_tag)
+                {k, {:conn, conn_tag}} -> {k, unquote(__MODULE__).safe_in(conn, conn_tag)}
               end)
 
             spawn(fn ->

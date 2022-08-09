@@ -4,6 +4,7 @@ defmodule DataDaemon.Resolver do
   require Logger
   alias DataDaemon.Hound
   import DataDaemon.Util
+  @day 24 * 60 * 60 * 1_000
 
   @doc false
   @spec refresh(module) :: :refresh
@@ -50,12 +51,11 @@ defmodule DataDaemon.Resolver do
 
     minimum_ttl = to_integer!(config(opts, otp, daemon, :minimum_ttl, 1_000))
 
-    Logger.debug(fn -> "DataDaemon: DNS lookup \"#{host}\"" end)
+    Logger.debug(fn -> "[DataDaemon] DNS lookup #{inspect(host)}" end, host: host)
 
     case resolve(host, minimum_ttl) do
       {ip, ttl} ->
         refresh_callback(refresh, ttl)
-
         recompile(daemon, ip, port)
 
         {:ok,
@@ -111,7 +111,7 @@ defmodule DataDaemon.Resolver do
     resolver = self()
 
     spawn_link(fn ->
-      Logger.debug(fn -> "DataDaemon: DNS lookup \"#{host}\"" end)
+      Logger.debug(fn -> "[DataDaemon] DNS lookup #{inspect(host)}" end, host: host)
 
       case resolve(host, minimum_ttl) do
         {ip, ttl} -> send(resolver, {:ip, ip, ttl})
@@ -127,33 +127,37 @@ defmodule DataDaemon.Resolver do
     :ok
   end
 
+  @doc false
   @spec resolve(charlist, non_neg_integer) :: {tuple, integer} | nil
-  defp resolve(host, minimum_ttl) do
-    case :inet_res.resolve(host, :in, :a) do
-      {:ok, {:dns_rec, _, _, records, _, _}} ->
-        find_ip_in_records(records, host, minimum_ttl)
-
-      invalid ->
-        Logger.error(fn -> "DataDaemon: Resolve failed: #{inspect(invalid)} (\"#{host}\")" end)
-        nil
+  def resolve(host, minimum_ttl) do
+    if ip = maybe_ip(host, minimum_ttl) || find_ip_in_records(host, minimum_ttl) do
+      ip
+    else
+      Logger.error(fn -> "[DataDaemon] Could not resolve: #{inspect(host)}" end, host: host)
+      nil
     end
   end
 
-  @spec find_ip_in_records(list, charlist, non_neg_integer) :: {tuple, integer} | nil
-  defp find_ip_in_records(records, host, minimum_ttl) do
+  @spec maybe_ip(host :: charlist(), non_neg_integer) :: {tuple, integer} | false
+  defp maybe_ip(host, minimum_ttl) do
+    case :inet.parse_address(host) do
+      {:ok, ip} -> {ip, max(minimum_ttl, @day)}
+      _ -> false
+    end
+  end
+
+  @spec find_ip_in_records(charlist, non_neg_integer) :: {tuple, integer} | false
+  defp find_ip_in_records(host, minimum_ttl) do
+    records =
+      case :inet_res.resolve(host, :in, :a) do
+        {:ok, {:dns_rec, _, _, records, _, _}} -> records
+        _ -> []
+      end
+
     case Enum.find_value(records, &match_resolve/1) do
-      {ip, ttl} when ttl < minimum_ttl ->
-        {ip, minimum_ttl}
-
-      {ip, ttl} ->
-        {ip, ttl}
-
-      _ ->
-        Logger.error(fn ->
-          "DataDaemon: Missing resolve record: #{inspect(records)} (\"#{host}\")"
-        end)
-
-        nil
+      {ip, ttl} when ttl < minimum_ttl -> {ip, minimum_ttl}
+      {ip, ttl} -> {ip, ttl}
+      _ -> false
     end
   end
 
