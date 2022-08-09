@@ -4,7 +4,7 @@ defmodule DataDaemon.MixProject do
   def project do
     [
       app: :data_daemon,
-      version: "0.4.0",
+      version: "0.4.1",
       description: "An Elixir StatsD client made for DataDog.",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
@@ -62,8 +62,7 @@ defmodule DataDaemon.MixProject do
     [
       {:plug, ">= 0.0.0", optional: true},
       {:meck, "~> 0.8.12", optional: true, runtime: false, only: [:test]},
-      {:analyze, "~> 0.1.10", optional: true, runtime: false, only: [:dev, :test]},
-      {:dialyxir, "~> 1.0.0-rc.7", optional: true, runtime: false, only: :dev}
+      {:analyze, ">= 0.0.0", optional: true, runtime: false, only: [:dev, :test]}
     ]
   end
 end
