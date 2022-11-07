@@ -2,14 +2,13 @@ defmodule DataDaemon.TestDaemonTest do
   use ExUnit.Case, async: false
 
   alias DataDaemon.TestDaemon
-
-  @test_metric_name "test_metric"
+  alias TestDaemonTestExample, as: Example
 
   defmodule TestDaemonTestExample do
     use DataDaemon, otp_app: :data_daemon, extensions: [:datadog], mode: :test
   end
 
-  alias TestDaemonTestExample, as: Example
+  @test_metric_name "test_metric"
 
   setup do
     Example.start_link()
