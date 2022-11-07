@@ -333,19 +333,25 @@ defmodule DataDaemon do
       """
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
-      def metric(key, value, type, opts \\ []),
-        do:
-          send_metric(
-            unquote(if namespace, do: quote(do: [unquote(namespace), key]), else: quote(do: key)),
-            value,
-            type,
-            unquote(
-              if tags == [],
-                do: quote(do: opts),
-                else:
-                  quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
-            )
+      def metric(key, value, type, opts \\ []) do
+        namespace =
+          unquote(
+            if namespace,
+              do: quote(do: opts[:namespace] || unquote(namespace)),
+              else: quote(do: opts[:namespace])
           )
+
+        send_metric(
+          if(namespace, do: [namespace, key], else: key),
+          value,
+          type,
+          unquote(
+            if tags == [],
+              do: quote(do: opts),
+              else: quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
+          )
+        )
+      end
 
       defp send_metric(key, value, type, opts),
         do: DataDaemonDriver.metric(__MODULE__.Sender, key, value, type, opts)
