@@ -28,8 +28,27 @@ defmodule DataDaemon.TestDaemon do
   def reported(reporter), do: Agent.get(Module.concat(reporter, Sender), &List.last/1)
 
   @doc false
+  @spec reported(module, String.t()) :: String.t() | nil
+  def reported(reporter, metric_name) do
+    Agent.get(Module.concat(reporter, Sender), fn reports ->
+      Enum.find(reports, &metric_match?(&1, metric_name))
+    end)
+  end
+
+  @doc false
   @spec all_reported(module) :: [String.t()]
   def all_reported(reporter), do: Agent.get(Module.concat(reporter, Sender), &Enum.reverse/1)
+
+  @doc false
+  @spec all_reported(module, String.t()) :: [String.t()]
+  def all_reported(reporter, metric_name) do
+    reporter
+    |> Module.concat(Sender)
+    |> Agent.get(fn reports ->
+      Enum.filter(reports, &metric_match?(&1, metric_name))
+    end)
+    |> Enum.reverse()
+  end
 
   @doc false
   @spec assert_reported(module, fun, integer) :: boolean
@@ -43,5 +62,10 @@ defmodule DataDaemon.TestDaemon do
       Process.sleep(10)
       poll_receive(module, timeout - 10)
     end
+  end
+
+  defp metric_match?(metric, metric_name) do
+    [name | _] = metric |> String.split(":", first: 1)
+    metric_name == name
   end
 end
