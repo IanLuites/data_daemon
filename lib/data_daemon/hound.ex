@@ -136,7 +136,7 @@ defmodule DataDaemon.Hound do
   ### UDP Building ###
 
   otp_release = :erlang.system_info(:otp_release)
-  @addr_family if(otp_release >= '19', do: [1], else: [])
+  @addr_family if(otp_release >= ~c"19", do: [1], else: [])
 
   defp build_header(host, port) do
     {ip1, ip2, ip3, ip4} =

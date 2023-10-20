@@ -142,7 +142,7 @@ defmodule DataDaemon.Extensions.DataDog do
     @impl :gen_event
     def init({_, {module, level}}) do
       {:ok, hostname} = :inet.gethostname()
-      {:ok, %{module: module, hostname: hostname, level: level}}
+      {:ok, %{module: module, hostname: hostname, level: upgrade_level(level)}}
     end
 
     @doc false
@@ -205,6 +205,13 @@ defmodule DataDaemon.Extensions.DataDog do
     defp translate_level(:info), do: :info
     defp translate_level(:debug), do: :info
     defp translate_level(:warn), do: :warning
+
+    @spec upgrade_level(atom) :: atom
+    defp upgrade_level(level)
+    if Version.match?(System.version(), ">= 1.15.0") do
+      defp upgrade_level(:warn), do: :warning
+    end
+    defp upgrade_level(level), do: level
 
     @doc false
     @impl :gen_event
