@@ -32,6 +32,10 @@ defmodule DataDaemon.TestDaemon do
   def all_reported(reporter), do: Agent.get(Module.concat(reporter, Sender), &Enum.reverse/1)
 
   @doc false
+  @spec clear(module) :: :ok | {:error, atom}
+  def clear(reporter), do: Agent.update(reporter, fn _ -> [] end)
+
+  @doc false
   @spec assert_reported(module, fun, integer) :: boolean
   def assert_reported(module, assertion, timeout \\ 15_000),
     do: assertion.(poll_receive(module, timeout))
