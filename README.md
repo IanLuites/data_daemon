@@ -150,6 +150,10 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.4.3 (2023-11-17)
+
+Added test helper clear function. (by @punchcafe)
+
 ### 0.4.3 (2023-10-23)
 
 Respect runtime configuration.  
