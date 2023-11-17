@@ -1,4 +1,4 @@
-use Mix.Config
+import Config
 
 config :data_daemon, test_tag: "tagged"
 

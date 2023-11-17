@@ -26,6 +26,8 @@ defmodule Sample.App do
   alias Sample.DataDog
 
   def send_metrics do
+    Sample.DataDog.start_link()
+
     tags = [zone: "us-east-1a"]
 
     DataDog.gauge("request.queue_depth", 12, tags: tags)
@@ -147,6 +149,11 @@ The following metrics are tracked:
 - `vm.garbage_collection.words`, number of words garbage.
 
 ## Changelog
+
+### 0.4.3 (2023-10-23)
+
+Respect runtime configuration.  
+Error with `{:error, :not_started}` when Daemon is not started.
 
 ### 0.4.1 (2022-08-09)
 

@@ -117,7 +117,7 @@ defmodule DataDaemon.Extensions.DataDog do
       def event(title, text, opts \\ []) do
         text = String.replace(text, "\n", "\\n")
 
-        send_metric(
+        __MODULE__.Driver.send_metric(
           "_e{#{String.length(title)},#{String.length(text)}}",
           title,
           build_event(text, opts),
@@ -208,9 +208,11 @@ defmodule DataDaemon.Extensions.DataDog do
 
     @spec upgrade_level(atom) :: atom
     defp upgrade_level(level)
+
     if Version.match?(System.version(), ">= 1.15.0") do
       defp upgrade_level(:warn), do: :warning
     end
+
     defp upgrade_level(level), do: level
 
     @doc false

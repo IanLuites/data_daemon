@@ -21,6 +21,8 @@ defmodule DataDaemon do
     alias Sample.DataDog
 
     def send_metrics do
+      Sample.DataDog.start_link()
+
       tags = [zone: "us-east-1a"]
 
       DataDog.gauge("request.queue_depth", 12, tags: tags)
@@ -88,13 +90,6 @@ defmodule DataDaemon do
     plug = if config.(:plug, true) && Code.ensure_loaded?(Plug), do: __MODULE__.Plug.enable()
     tags = config.(:tags, [])
 
-    mode =
-      case config.(:mode, :send) do
-        :send -> quote(do: alias(DataDaemon, as: DataDaemonDriver))
-        :log -> quote(do: alias(DataDaemon.LogDaemon, as: DataDaemonDriver))
-        :test -> quote(do: alias(DataDaemon.TestDaemon, as: DataDaemonDriver))
-      end
-
     extensions =
       case config.(:extensions, []) do
         nil -> []
@@ -118,8 +113,11 @@ defmodule DataDaemon do
     quote location: :keep do
       @opts unquote(opts |> Keyword.merge(otp_config) |> Keyword.put(:hound, hound_config))
 
-      ### Base ###
-      unquote(mode)
+      @spec config(setting :: atom, default :: term) :: term
+      defp config(setting, default) do
+        import DataDaemon.Util, only: [config: 5]
+        config(@opts, unquote(otp_app), __MODULE__, setting, default)
+      end
 
       @doc false
       @spec otp :: atom
@@ -147,6 +145,29 @@ defmodule DataDaemon do
           |> Keyword.merge(Application.get_env(otp(), __MODULE__, []))
           |> Keyword.merge(opts)
 
+        driver =
+          case config(:mode, :send) do
+            :send -> DataDaemon
+            :log -> DataDaemon.LogDaemon
+            :test -> DataDaemon.TestDaemon
+          end
+
+        Code.compiler_options(ignore_module_conflict: true)
+
+        Code.compile_quoted(
+          quote do
+            defmodule unquote(__MODULE__.Driver) do
+              @moduledoc false
+              @doc false
+              def send_metric(key, value, type, opts) do
+                unquote(driver).metric(unquote(__MODULE__.Sender), key, value, type, opts)
+              end
+            end
+          end
+        )
+
+        Code.compiler_options(ignore_module_conflict: false)
+
         children =
           Enum.reduce(unquote(extensions), [], fn ext, acc ->
             if child = ext.child_spec(__MODULE__, options) do
@@ -157,7 +178,7 @@ defmodule DataDaemon do
           end)
 
         with started = {:ok, _} <-
-               DataDaemonDriver.start_link(__MODULE__, [{:children, children} | options]) do
+               driver.start_link(__MODULE__, [{:children, children} | options]) do
           Enum.each(unquote(extensions), & &1.init(__MODULE__, options))
           started
         end
@@ -333,22 +354,30 @@ defmodule DataDaemon do
       """
       @spec metric(DataDaemon.key(), DataDaemon.value(), DataDaemon.type(), Keyword.t()) ::
               :ok | {:error, atom}
-      def metric(key, value, type, opts \\ []),
-        do:
-          send_metric(
-            unquote(if namespace, do: quote(do: [unquote(namespace), key]), else: quote(do: key)),
-            value,
-            type,
-            unquote(
-              if tags == [],
-                do: quote(do: opts),
-                else:
-                  quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
-            )
+      def metric(key, value, type, opts \\ []) do
+        __MODULE__.Driver.send_metric(
+          unquote(if namespace, do: quote(do: [unquote(namespace), key]), else: quote(do: key)),
+          value,
+          type,
+          unquote(
+            if tags == [],
+              do: quote(do: opts),
+              else: quote(do: Keyword.update(opts, :tags, unquote(tags), &(unquote(tags) ++ &1)))
           )
+        )
+      end
 
-      defp send_metric(key, value, type, opts),
-        do: DataDaemonDriver.metric(__MODULE__.Sender, key, value, type, opts)
+      defmodule Driver do
+        @moduledoc false
+        @doc false
+        def send_metric(_, _, _, _), do: Enum.random([{:error, :not_started}])
+      end
+
+      defmodule Sender do
+        @moduledoc false
+        @doc false
+        def send(_), do: Enum.random([{:error, :not_started}])
+      end
     end
   end
 

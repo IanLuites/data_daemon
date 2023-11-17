@@ -48,7 +48,7 @@ defmodule DataDaemon.Extensions.DataDogErrorHandlerTest do
     end
 
     test "catches `warn`" do
-      Logger.warn("Captured")
+      Logger.warning("Captured")
 
       TestDaemon.assert_reported(Example, fn event ->
         assert event =~ ~r/^_e\{[0-9]+,[0-9]+\}:Captured\|/

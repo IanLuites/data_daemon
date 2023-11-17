@@ -58,7 +58,7 @@ defmodule DataDaemon.Extensions.DataDogTest do
     test "sets timestamp with timestamp: <Integer>" do
       assert Example.event("title", "body", timestamp: 1_538_905_853_149) == :ok
 
-      assert "d:2018-10-07T09:50:53Z" in reported()
+      assert "d:2018-10-07T09:50:53.149Z" in reported()
     end
 
     test "sets timestamp with timestamp: <DateTime>" do
