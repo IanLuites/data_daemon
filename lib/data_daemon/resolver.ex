@@ -100,7 +100,7 @@ defmodule DataDaemon.Resolver do
           refresh: refresh
         }
       ) do
-    if ip == ip_old, do: recompile(daemon, ip, port)
+    if ip != ip_old, do: recompile(daemon, ip, port)
 
     refresh_callback(refresh, ttl)
     {:noreply, %{state | ip: ip, ttl: ttl}}

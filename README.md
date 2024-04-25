@@ -150,6 +150,10 @@ The following metrics are tracked:
 
 ## Changelog
 
+### 0.4.5 (2024-04-25)
+
+Fix recompilation when IP does not change.
+
 ### 0.4.3 (2023-11-17)
 
 Added test helper clear function. (by @punchcafe)
